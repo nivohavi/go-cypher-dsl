@@ -78,7 +78,7 @@ func main() {
 	// Example 2: MATCH-WHERE-RETURN with property expressions
 	// Direct property access without type assertions
 	stmt2, err := cypher.Match(person).
-		Where(person.Property("name").Eq(cypher.Literal("Tom Hanks"))).
+		Where(person.Property("name").Eq("Tom Hanks")).
 		Returning(person).
 		Build()
 
@@ -117,7 +117,7 @@ func main() {
 
 	stmt3, err := cypher.Match(actedInPattern).
 		Returning(p, movie).
-		Limit(cypher.Literal(3)).
+		Limit(3).
 		Build()
 
 	if err != nil {
@@ -147,10 +147,9 @@ func main() {
 
 	// Example 4: Using WITH clause and multiple conditions
 	// Create a complete relationship pattern
-	nameParam := cypher.Literal("Tom Hanks")
 	tomHanks := cypher.Node("Person").Named("p")
 	// Use individual property setting instead of map
-	tomHandsProp := tomHanks.Property("name").Eq(nameParam)
+	tomHandsProp := tomHanks.Property("name").Eq("Tom Hanks")
 
 	movieNode := cypher.Node("Movie").Named("m")
 	actedInRel := cypher.Pattern(tomHanks, tomHanks.RelationshipTo(movieNode, "ACTED_IN"), movieNode)
@@ -162,7 +161,7 @@ func main() {
 		Where(movieNode.Property("released").Gt(cypher.ParamWithValue("year", 2000))).
 		Returning(movieNode.Property("title"), movieNode.Property("released")).
 		OrderBy(cypher.Desc(movieNode.Property("released"))).
-		Limit(cypher.Literal(5)).
+		Limit(5).
 		Build()
 
 	if err != nil {
@@ -191,15 +190,15 @@ func main() {
 	fmt.Println()
 
 	// Example 5: Complex logical expressions
-	condition := movie.Property("released").Gt(cypher.Literal(2000)).
-		And(movie.Property("released").Lt(cypher.Literal(2010))).
-		Or(movie.Property("title").Contains(cypher.Literal("Matrix")).Not())
+	condition := movie.Property("released").Gt(2000).
+		And(movie.Property("released").Lt(2010)).
+		Or(movie.Property("title").Contains("Matrix").Not())
 
 	stmt5, err := cypher.Match(movie).
 		Where(condition).
 		Returning(movie.Property("title"), movie.Property("released")).
 		OrderBy(movie.Property("released")).
-		Limit(cypher.Literal(5)).
+		Limit(5).
 		Build()
 
 	if err != nil {

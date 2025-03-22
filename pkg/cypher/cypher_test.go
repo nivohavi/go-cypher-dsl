@@ -35,7 +35,7 @@ func TestMatchWhereReturn(t *testing.T) {
 
 	// Build a MATCH ... WHERE ... RETURN query
 	stmt, err := Match(person).
-		Where(person.Property("name").Eq(Literal("Tom Hanks"))).
+		Where(person.Property("name").Eq("Tom Hanks")).
 		Returning(person).
 		Build()
 
@@ -84,11 +84,10 @@ func TestMatchWhereWithParameters(t *testing.T) {
 
 func TestCreateNodeWithProperties(t *testing.T) {
 	// Define a node with properties
-	props := map[string]Expression{
-		"name": Literal("Keanu Reeves"),
-		"born": Literal(1964),
-	}
-	person := Node("Person").(*nodePattern).WithProperties(props)
+	person := Node("Person").(*nodePattern).WithProps(map[string]interface{}{
+		"name": "Keanu Reeves",
+		"born": 1964,
+	})
 
 	// Build a CREATE query
 	stmt, err := Create(person).Build()
@@ -163,9 +162,9 @@ func TestLogicalExpressions(t *testing.T) {
 	year := movie.Property("released")
 	title := movie.Property("title")
 
-	condition := year.Gt(Literal(2000)).And(
-		year.Lt(Literal(2010)).Or(
-			title.Contains(Literal("Matrix")).Not(),
+	condition := year.Gt(2000).And(
+		year.Lt(2010).Or(
+			title.Contains("Matrix").Not(),
 		),
 	)
 
@@ -193,7 +192,7 @@ func TestWithClause(t *testing.T) {
 
 	// Build a query with WITH
 	stmt, err := Match(person).
-		Where(person.Property("name").Eq(Literal("Tom Hanks"))).
+		Where(person.Property("name").Eq("Tom Hanks")).
 		With(person).
 		Match(movie).
 		Where(movie.Property("title").Contains(person.Property("name"))).
@@ -314,7 +313,7 @@ func TestSetQuery(t *testing.T) {
 
 	// Build a MATCH ... SET query
 	matchStmt, err := Match(person).
-		Where(person.Property("name").Eq(Literal("Keanu Reeves"))).
+		Where(person.Property("name").Eq("Keanu Reeves")).
 		Build()
 
 	if err != nil {
@@ -350,7 +349,7 @@ func TestDeleteQuery(t *testing.T) {
 
 	// Build a MATCH ... DELETE query
 	matchStmt, err := Match(person).
-		Where(person.(*nodePattern).Property("name").Eq(Literal("John"))).
+		Where(person.(*nodePattern).Property("name").Eq("John")).
 		Build()
 
 	if err != nil {

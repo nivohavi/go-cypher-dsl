@@ -6,15 +6,12 @@ This directory contains various examples demonstrating how to use the Go Cypher 
 
 ```
 examples/
-├── dsl/               # Pure DSL usage examples without database connectivity
-│   ├── simple/        # Basic DSL examples
-│   └── complex/       # More complex DSL patterns (WIP)
+├── improved_api/       # Examples using the improved API
 │
-├── neo4j/             # Examples that connect to Neo4j database
-│   ├── basic/         # Basic Neo4j connectivity examples
-│   └── movie_graph/   # Examples using the Neo4j movie graph dataset
+├── neo4j/              # Examples that connect to Neo4j database
+│   └── movie_graph/    # Examples using the Neo4j movie graph dataset
 │
-└── patterns/          # Common Cypher patterns implemented with the DSL
+└── patterns/           # Common Cypher patterns implemented with the DSL
 ```
 
 ## Running the Examples
@@ -22,13 +19,13 @@ examples/
 Each subdirectory contains standalone Go programs that can be run directly. For example:
 
 ```bash
-# Run a simple DSL example
-cd examples/dsl/simple
-go run dsl_examples.go
+# Run an improved API example
+cd examples/improved_api
+go run example.go
 
-# Run a Neo4j connection example
-cd examples/neo4j/basic
-go run neo4j_connection.go
+# Run a Neo4j connection example with movie graph
+cd examples/neo4j/movie_graph
+go run movie_queries.go
 ```
 
 ## Neo4j Examples
@@ -42,9 +39,9 @@ Default connection parameters:
 
 ## Example Categories
 
-### DSL Examples
+### Improved API Examples
 
-The DSL examples demonstrate how to build Cypher queries programmatically without executing them against a database.
+The improved API examples demonstrate how to build Cypher queries programmatically using the simpler, more intuitive API style.
 
 ### Neo4j Examples
 

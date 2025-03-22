@@ -12,7 +12,7 @@ func TestWithClauseDebug(t *testing.T) {
 
 	// Build a query with WITH
 	matchBuilder := Match(person)
-	matchWithWhere := matchBuilder.Where(person.Property("name").Eq(Literal("Tom Hanks")))
+	matchWithWhere := matchBuilder.Where(person.Property("name").Eq("Tom Hanks"))
 	withBuilder := matchWithWhere.With(person)
 	matchBuilderAfterWith := withBuilder.Match(movie)
 	matchBuilderWithWhere := matchBuilderAfterWith.Where(movie.Property("title").Contains(person.Property("name")))

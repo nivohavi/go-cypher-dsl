@@ -9,7 +9,7 @@ func TestLogicalExpressionsWithNot(t *testing.T) {
 	movie := Node("Movie").Named("m").(*nodePattern)
 
 	// Create the NOT expression
-	notExpr := movie.Property("title").Contains(Literal("Matrix")).Not()
+	notExpr := movie.Property("title").Contains("Matrix").Not()
 
 	// Build a query with NOT
 	stmt, err := Match(movie).

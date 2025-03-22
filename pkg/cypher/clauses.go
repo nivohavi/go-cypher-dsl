@@ -1,6 +1,7 @@
 package cypher
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -299,14 +300,14 @@ func (r *ReturnBuilder) OrderByDesc(expressions ...Expression) *ReturnBuilder {
 }
 
 // Skip adds a SKIP clause to this builder
-func (r *ReturnBuilder) Skip(count Expression) *ReturnBuilder {
-	r.clause.skip = count
+func (r *ReturnBuilder) Skip(count interface{}) *ReturnBuilder {
+	r.clause.skip = toExpression(count)
 	return r
 }
 
 // Limit adds a LIMIT clause to this builder
-func (r *ReturnBuilder) Limit(count Expression) *ReturnBuilder {
-	r.clause.limit = count
+func (r *ReturnBuilder) Limit(count interface{}) *ReturnBuilder {
+	r.clause.limit = toExpression(count)
 	return r
 }
 
@@ -446,14 +447,14 @@ func (w *WithBuilder) OrderByDesc(expressions ...Expression) *WithBuilder {
 }
 
 // Skip adds a SKIP clause to this builder
-func (w *WithBuilder) Skip(count Expression) *WithBuilder {
-	w.clause.skip = count
+func (w *WithBuilder) Skip(count interface{}) *WithBuilder {
+	w.clause.skip = toExpression(count)
 	return w
 }
 
 // Limit adds a LIMIT clause to this builder
-func (w *WithBuilder) Limit(count Expression) *WithBuilder {
-	w.clause.limit = count
+func (w *WithBuilder) Limit(count interface{}) *WithBuilder {
+	w.clause.limit = toExpression(count)
 	return w
 }
 
@@ -858,22 +859,32 @@ func (s *SetBuilder) HasError() bool {
 }
 
 // Property adds a property assignment to this SET clause
-func (s *SetBuilder) Property(property PropertyExpression, value Expression) *SetBuilder {
-	s.clause.items = append(s.clause.items, &SetItem{
+func (s *SetBuilder) Property(property PropertyExpression, value interface{}) *SetBuilder {
+	if property == nil {
+		s.err = errors.New("property cannot be nil")
+		return s
+	}
+	item := &SetItem{
 		property: property,
-		value:    value,
+		value:    toExpression(value),
 		operator: "=",
-	})
+	}
+	s.clause.items = append(s.clause.items, item)
 	return s
 }
 
 // PropertyAdd adds a property addition to this SET clause
-func (s *SetBuilder) PropertyAdd(property PropertyExpression, value Expression) *SetBuilder {
-	s.clause.items = append(s.clause.items, &SetItem{
+func (s *SetBuilder) PropertyAdd(property PropertyExpression, value interface{}) *SetBuilder {
+	if property == nil {
+		s.err = errors.New("property cannot be nil")
+		return s
+	}
+	item := &SetItem{
 		property: property,
-		value:    value,
+		value:    toExpression(value),
 		operator: "+=",
-	})
+	}
+	s.clause.items = append(s.clause.items, item)
 	return s
 }
 
