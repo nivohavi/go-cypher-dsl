@@ -54,7 +54,7 @@ movie := cypher.Node("Movie").Named("m")
 // Create a relationship
 acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
 
-// Create a pattern
+// Create a pattern with the relationship
 pattern := cypher.Pattern(person, acted, movie)
 
 // Use in a query
@@ -110,12 +110,15 @@ if builder.HasError() {
 The library automatically converts Go values to Cypher expressions:
 
 ```go
-// Automatically converts 1950 to a literal
-person.Property("born").Gt(1950)
+// Values are automatically converted to appropriate Cypher expressions
+condition := person.Property("born").Gt(1950)
 
-// Automatically converts string array to literal array
+// Use parameters for query parameterization
+paramCondition := movie.Property("released").Gt(cypher.ParamWithValue("year", 2000))
+
+// Arrays are handled nicely too
 genres := []string{"Action", "Drama"}
-movie.Property("genres").In(genres)
+inGenres := movie.Property("genres").In(genres)
 ```
 
 ### Property Shorthand
@@ -170,38 +173,61 @@ fmt.Println(findQuery.Cypher())
 
 ```go
 // Create a node with properties
-createQuery := cypher.CreateNodeWithProperties("Actor", map[string]interface{}{
-    "name": "Keanu Reeves",
-    "born": 1964,
+person := cypher.Node("Person").Named("p")
+
+// Set properties using a map
+personWithProps := person.WithProps(map[string]interface{}{
+    "name": "John Doe",
+    "age":  30,
 })
 
-fmt.Println(createQuery.Cypher())
-// CREATE (n:`Actor` {name: 'Keanu Reeves', born: 1964}) RETURN n
+// Build the query
+stmt, _ := cypher.Create(personWithProps).
+    Returning(personWithProps).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// CREATE (p:`Person` {name: 'John Doe', age: 30}) RETURN p
 ```
 
 ### Creating Relationships
 
 ```go
-// Get existing nodes
+// Create relationship between nodes
 person := cypher.Node("Person").Named("p")
 movie := cypher.Node("Movie").Named("m")
 
-// Create a relationship between nodes
-relQuery := cypher.RelateNodes(person, "ACTED_IN", movie, map[string]interface{}{
+// Create a relationship pattern
+actedIn := person.RelationshipTo(movie, "ACTED_IN")
+
+// Add properties to the relationship
+actedInWithProps := actedIn.WithProps(map[string]interface{}{
     "role": "Neo",
 })
 
-fmt.Println(relQuery.Cypher())
+// Create a pattern with the relationship
+pattern := cypher.Pattern(person, actedInWithProps, movie)
+
+// Build the query
+stmt, _ := cypher.Create(pattern).
+    Returning(person, actedInWithProps, movie).
+    Build()
+
+fmt.Println(stmt.Cypher())
 // CREATE (p:`Person`)-[:`ACTED_IN` {role: 'Neo'}]->(m:`Movie`) RETURN p, r, m
 ```
 
 ### Deleting Nodes
 
 ```go
+// Delete a node
 person := cypher.Node("Person").Named("p")
 
-// Delete a node (with optional detach)
-deleteQuery := cypher.DeleteNode(person, true) // true for DETACH DELETE
+// Create a delete statement
+deleteStmt, _ := cypher.Delete(person).Build()
+
+// For detach delete
+detachDeleteStmt, _ := cypher.DetachDelete(person).Build()
 ```
 
 ## Advanced Examples
@@ -213,12 +239,18 @@ person := cypher.Node("Person").Named("p")
 movie := cypher.Node("Movie").Named("m")
 acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
 
-stmt, _ := cypher.Match(cypher.Pattern(person, acted, movie)).
-    Where(person.Prop("name").Eq("Tom Hanks")).
-    With(person, movie, cypher.Count(acted).As("roles")).
+// Create the pattern
+pattern := cypher.Pattern(person, acted, movie)
+
+// Create a count expression
+rolesCount := cypher.As(cypher.Function("count", acted), "roles")
+
+stmt, _ := cypher.Match(pattern).
+    Where(person.Property("name").Eq("Tom Hanks")).
+    With(person, movie, rolesCount).
     Where(cypher.Name("roles").Gt(1)).
-    Returning(movie.Prop("title"), cypher.Name("roles")).
-    OrderByDesc(cypher.Name("roles")).
+    Returning(movie.Property("title"), cypher.Name("roles")).
+    OrderBy(cypher.Desc(cypher.Name("roles"))).
     Limit(10).
     Build()
 
@@ -232,26 +264,30 @@ fmt.Println(stmt.Cypher())
 // LIMIT 10
 ```
 
-### Combining Multiple Statements with Transactions
+### Finding Co-actors Pattern
 
 ```go
-// Create a transaction
-tx := cypher.NewTransaction()
+// Tom Hanks' co-actors pattern
+tom := cypher.Node("Person").Named("tom")
+movie := cypher.Node("Movie").Named("m")
+coActors := cypher.Node("Person").Named("coActors")
 
-// Add multiple statements
-matchStmt, _ := cypher.Match(person).
-    Where(person.Prop("name").Eq("Tom Hanks")).
-    Returning(person).
+// Create the complex relationship pattern
+tomToMovie := tom.RelationshipTo(movie, "ACTED_IN")
+movieToCoActors := movie.RelationshipFrom(coActors, "ACTED_IN")
+
+// Create the path pattern with both relationships
+path := cypher.Pattern(tom, tomToMovie, movie, movieToCoActors, coActors)
+
+stmt, _ := cypher.Match(path).
+    Where(tom.Property("name").Eq("Tom Hanks")).
+    Returning(coActors.Property("name")).
     Build()
 
-createStmt, _ := cypher.Create(movie).
-    Returning(movie).
-    Build()
-
-tx.Add(matchStmt)
-tx.Add(createStmt)
-
-// Execute the transaction with Neo4j
+fmt.Println(stmt.Cypher())
+// MATCH (tom:`Person`)-[:`ACTED_IN`]->(m:`Movie`)<-[:`ACTED_IN`]-(coActors:`Person`) 
+// WHERE tom.name = 'Tom Hanks' 
+// RETURN coActors.name
 ```
 
 ## Integration with Neo4j Driver
@@ -260,7 +296,6 @@ tx.Add(createStmt)
 package main
 
 import (
-    "context"
     "fmt"
     "github.com/neo4j/neo4j-go-driver/v4/neo4j"
     "github.com/yourusername/go-cypher-dsl/pkg/cypher"
@@ -283,15 +318,20 @@ func main() {
     movie := cypher.Node("Movie").Named("m")
     acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
     
-    stmt, _ := cypher.Match(cypher.Pattern(person, acted, movie)).
-        Where(person.Prop("name").Eq("Tom Hanks")).
-        Returning(movie.Prop("title").As("title"), 
-                  acted.Prop("role").As("role")).
+    // Create the pattern
+    pattern := cypher.Pattern(person, acted, movie)
+    
+    // Build the statement
+    stmt, _ := cypher.Match(pattern).
+        Where(person.Property("name").Eq("Tom Hanks")).
+        Returning(
+            cypher.As(movie.Property("title"), "title"),
+            cypher.As(acted.Property("role"), "role"),
+        ).
         Build()
     
     // Execute the query
     result, err := session.Run(
-        context.Background(),
         stmt.Cypher(),
         stmt.Params(),
     )
@@ -301,7 +341,7 @@ func main() {
     }
     
     // Process results
-    for result.Next(context.Background()) {
+    for result.Next() {
         record := result.Record()
         title, _ := record.Get("title")
         role, _ := record.Get("role")

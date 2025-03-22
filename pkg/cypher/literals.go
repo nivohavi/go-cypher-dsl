@@ -301,7 +301,7 @@ func (m *mapExpression) Entries() map[string]Expression {
 }
 
 // toExpression converts an arbitrary value to an Expression
-func toExpression(value interface{}) Expression {
+func ToExpression(value interface{}) Expression {
 	if value == nil {
 		return Literal(nil)
 	}
@@ -321,4 +321,9 @@ func toExpression(value interface{}) Expression {
 
 	// For other types, just use their String() representation
 	return Literal(fmt.Sprintf("%v", value))
+}
+
+// Kept for backward compatibility - use ToExpression instead
+func toExpression(value interface{}) Expression {
+	return ToExpression(value)
 }
