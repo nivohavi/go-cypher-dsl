@@ -292,6 +292,8 @@ fmt.Println(stmt.Cypher())
 
 ## Integration with Neo4j Driver
 
+### Basic Query Execution
+
 ```go
 package main
 
@@ -348,6 +350,297 @@ func main() {
         fmt.Printf("Movie: %s, Role: %s\n", title, role)
     }
 }
+```
+
+### Working with Transactions
+
+```go
+func createMovieWithActors(driver neo4j.Driver, movieTitle string, releaseYear int, actors []Actor) error {
+    session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+    defer session.Close()
+    
+    // Execute within a transaction
+    _, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+        // Create movie node
+        movieNode := cypher.Node("Movie").Named("m")
+        movieWithProps := movieNode.WithProps(map[string]interface{}{
+            "title": movieTitle,
+            "released": releaseYear,
+        })
+        
+        // Create the movie
+        createMovieStmt, err := cypher.Create(movieWithProps).
+            Returning(movieNode).
+            Build()
+            
+        if err != nil {
+            return nil, err
+        }
+        
+        // Execute movie creation
+        result, err := tx.Run(createMovieStmt.Cypher(), createMovieStmt.Params())
+        if err != nil {
+            return nil, err
+        }
+        
+        // Create actors and relationships
+        for _, actor := range actors {
+            // Create/merge actor node
+            actorNode := cypher.Node("Person").Named("p")
+            mergeActorStmt, err := cypher.Merge(actorNode.WithProps(map[string]interface{}{
+                "name": actor.Name,
+            })).Returning(actorNode).Build()
+            
+            if err != nil {
+                return nil, err
+            }
+            
+            // Execute actor merge
+            _, err = tx.Run(mergeActorStmt.Cypher(), mergeActorStmt.Params())
+            if err != nil {
+                return nil, err
+            }
+            
+            // Create relationship
+            actedInRel := actorNode.RelationshipTo(movieNode, "ACTED_IN").WithProps(map[string]interface{}{
+                "role": actor.Role,
+            })
+            
+            // Build relationship creation
+            createRelStmt, err := cypher.Match(movieNode).
+                Where(movieNode.Property("title").Eq(movieTitle)).
+                Match(actorNode).
+                Where(actorNode.Property("name").Eq(actor.Name)).
+                Create(cypher.Pattern(actorNode, actedInRel, movieNode)).
+                Build()
+                
+            if err != nil {
+                return nil, err
+            }
+            
+            // Execute relationship creation
+            _, err = tx.Run(createRelStmt.Cypher(), createRelStmt.Params())
+            if err != nil {
+                return nil, err
+            }
+        }
+        
+        return result.Single(), nil
+    })
+    
+    return err
+}
+
+type Actor struct {
+    Name string
+    Role string
+}
+
+// Usage:
+// actors := []Actor{
+//     {Name: "Tom Hanks", Role: "Forrest"},
+//     {Name: "Robin Wright", Role: "Jenny"},
+// }
+// err := createMovieWithActors(driver, "Forrest Gump", 1994, actors)
+```
+
+### Parameterized Queries with Dynamic Conditions
+
+```go
+func findMoviesByFilters(session neo4j.Session, filters MovieFilters) ([]Movie, error) {
+    // Create the base query
+    movie := cypher.Node("Movie").Named("m")
+    matchBuilder := cypher.Match(movie)
+    
+    // Build dynamic conditions based on filters
+    var conditions []cypher.BooleanExpression
+    
+    if filters.Title != "" {
+        conditions = append(conditions, 
+            movie.Property("title").Contains(filters.Title))
+    }
+    
+    if filters.MinYear > 0 {
+        conditions = append(conditions, 
+            movie.Property("released").Gte(filters.MinYear))
+    }
+    
+    if filters.MaxYear > 0 {
+        conditions = append(conditions, 
+            movie.Property("released").Lte(filters.MaxYear))
+    }
+    
+    if len(filters.Genres) > 0 {
+        // Array containment check
+        conditions = append(conditions,
+            movie.Property("genres").In(filters.Genres))
+    }
+    
+    if filters.DirectorName != "" {
+        // Add relationship condition with director
+        director := cypher.Node("Person").Named("d")
+        directedRel := director.RelationshipTo(movie, "DIRECTED")
+        
+        // Build the pattern with an additional match
+        matchBuilder = matchBuilder.Match(cypher.Pattern(director, directedRel, movie))
+        conditions = append(conditions, 
+            director.Property("name").Eq(filters.DirectorName))
+    }
+    
+    // Combine all conditions with AND
+    if len(conditions) > 0 {
+        var condition cypher.BooleanExpression = conditions[0]
+        for i := 1; i < len(conditions); i++ {
+            condition = condition.And(conditions[i])
+        }
+        matchBuilder = matchBuilder.Where(condition)
+    }
+    
+    // Add return and limit
+    stmt, err := matchBuilder.
+        Returning(movie).
+        Limit(filters.Limit).
+        Build()
+        
+    if err != nil {
+        return nil, err
+    }
+    
+    // Execute the query
+    result, err := session.Run(stmt.Cypher(), stmt.Params())
+    if err != nil {
+        return nil, err
+    }
+    
+    // Process results
+    var movies []Movie
+    for result.Next() {
+        record := result.Record()
+        movieNode, _ := record.Get("m")
+        
+        // Convert Neo4j Node to Movie struct
+        movie := nodeToMovie(movieNode.(neo4j.Node))
+        movies = append(movies, movie)
+    }
+    
+    return movies, nil
+}
+
+type MovieFilters struct {
+    Title        string
+    MinYear      int
+    MaxYear      int
+    Genres       []string
+    DirectorName string
+    Limit        int
+}
+
+type Movie struct {
+    Title    string
+    Released int
+    Genres   []string
+    // Other properties...
+}
+
+func nodeToMovie(node neo4j.Node) Movie {
+    props := node.Props()
+    
+    // Extract genres as string slice
+    var genres []string
+    if genresValue, ok := props["genres"].([]interface{}); ok {
+        for _, g := range genresValue {
+            if genre, ok := g.(string); ok {
+                genres = append(genres, genre)
+            }
+        }
+    }
+    
+    // Create movie from node properties
+    return Movie{
+        Title:    props["title"].(string),
+        Released: int(props["released"].(int64)),
+        Genres:   genres,
+    }
+}
+
+// Usage:
+// filters := MovieFilters{
+//     MinYear: 1990,
+//     MaxYear: 2000,
+//     DirectorName: "Steven Spielberg",
+//     Limit: 5,
+// }
+// movies, err := findMoviesByFilters(session, filters)
+```
+
+### Path Aggregation and Shortest Path
+
+```go
+func findShortestPath(session neo4j.Session, startActorName, endActorName string) ([]string, error) {
+    // Define nodes
+    startActor := cypher.Node("Person").Named("start")
+    endActor := cypher.Node("Person").Named("end")
+    
+    // Create a variable length path between actors
+    // This uses a Cypher shortestPath function
+    pathExpr := cypher.Function("shortestPath", cypher.PatternPath(
+        startActor,
+        startActor.RelationshipTo(endActor, "*").Named("r").WithProps(map[string]interface{}{
+            "length": "*",  // Variable length path
+        }),
+        endActor,
+    ))
+    
+    // Build the query
+    stmt, err := cypher.Match(startActor).
+        Where(startActor.Property("name").Eq(startActorName)).
+        Match(endActor).
+        Where(endActor.Property("name").Eq(endActorName)).
+        With(startActor, endActor).
+        Match(cypher.As(pathExpr, "p")).
+        Returning(cypher.Name("p")).
+        Build()
+        
+    if err != nil {
+        return nil, err
+    }
+    
+    // Execute the query
+    result, err := session.Run(stmt.Cypher(), stmt.Params())
+    if err != nil {
+        return nil, err
+    }
+    
+    // Process result
+    if result.Next() {
+        record := result.Record()
+        path, _ := record.Get("p")
+        
+        // Extract node names from path
+        return extractPathNodeNames(path.(neo4j.Path)), nil
+    }
+    
+    return nil, fmt.Errorf("no path found between %s and %s", startActorName, endActorName)
+}
+
+func extractPathNodeNames(path neo4j.Path) []string {
+    var names []string
+    
+    // Add all node names from the path
+    for _, node := range path.Nodes() {
+        if name, ok := node.Props()["name"].(string); ok {
+            names = append(names, name)
+        }
+    }
+    
+    return names
+}
+
+// Usage:
+// path, err := findShortestPath(session, "Kevin Bacon", "Tom Hanks")
+// if err == nil {
+//     fmt.Println("Bacon path:", strings.Join(path, " -> "))
+// }
 ```
 
 ## Examples
