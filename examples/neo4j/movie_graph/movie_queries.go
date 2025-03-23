@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
-	"github.com/yourusername/go-cypher-dsl/pkg/cypher"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher"
 )
 
 func main() {
