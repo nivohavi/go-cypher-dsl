@@ -4,7 +4,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/yourusername/go-cypher-dsl/pkg/cypher"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher"
 )
 
 func main() {

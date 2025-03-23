@@ -7,7 +7,7 @@ A fluent, type-safe Cypher query builder for Go. Build Neo4j queries programmati
 ## Installation
 
 ```bash
-go get github.com/yourusername/go-cypher-dsl
+go get github.com/nivohavi/go-cypher-dsl
 ```
 
 ## Quick Start
@@ -17,7 +17,7 @@ package main
 
 import (
     "fmt"
-    "github.com/yourusername/go-cypher-dsl/pkg/cypher"
+    "github.com/nivohavi/go-cypher-dsl/pkg/cypher"
 )
 
 func main() {
@@ -300,7 +300,7 @@ package main
 import (
     "fmt"
     "github.com/neo4j/neo4j-go-driver/v4/neo4j"
-    "github.com/yourusername/go-cypher-dsl/pkg/cypher"
+    "github.com/nivohavi/go-cypher-dsl/pkg/cypher"
 )
 
 func main() {

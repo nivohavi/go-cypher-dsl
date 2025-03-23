@@ -1,4 +1,4 @@
-module github.com/yourusername/go-cypher-dsl
+module github.com/nivohavi/go-cypher-dsl
 
 go 1.21
 
