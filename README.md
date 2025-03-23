@@ -1,6 +1,8 @@
 # go-cypher-dsl
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nivohavi/go-cypher-dsl.svg)](https://pkg.go.dev/github.com/nivohavi/go-cypher-dsl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nivohavi/go-cypher-dsl)](https://goreportcard.com/report/github.com/nivohavi/go-cypher-dsl)
 
 A fluent, type-safe Cypher query builder for Go. Build Neo4j queries programmatically with syntax completion, reducing errors and improving development speed.
 
