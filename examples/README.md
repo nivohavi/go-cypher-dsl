@@ -6,6 +6,8 @@ This directory contains various examples demonstrating how to use the Go Cypher 
 
 ```
 examples/
+├── enhanced_features/  # Examples showcasing new advanced features
+│
 ├── improved_api/       # Examples using the improved API
 │
 ├── neo4j/              # Examples that connect to Neo4j database
@@ -19,6 +21,10 @@ examples/
 Each subdirectory contains standalone Go programs that can be run directly. For example:
 
 ```bash
+# Run the enhanced features example
+cd examples/enhanced_features
+go run example.go
+
 # Run an improved API example
 cd examples/improved_api
 go run example.go
@@ -38,6 +44,14 @@ Default connection parameters:
 - Password: `Password1` (you'll need to change this to match your setup)
 
 ## Example Categories
+
+### Enhanced Features Examples
+
+The enhanced features examples demonstrate the newest capabilities of the library:
+- **ComplexPath**: Simplified creation of multi-level relationship paths
+- **Property Comparison Helpers**: More concise property comparisons with `CompareProperty` and `NamedCompareProperty`
+- **Schema Management**: Easier creation of constraints and indexes
+- **Neo4j Driver Integration**: Simplified execution with `SessionManager` and result handling
 
 ### Improved API Examples
 

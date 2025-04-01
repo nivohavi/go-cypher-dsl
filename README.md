@@ -68,6 +68,145 @@ fmt.Println(query.Cypher())
 // MATCH (p:`Person`)-[r:`ACTED_IN`]->(m:`Movie`) RETURN p, m
 ```
 
+## Enhanced Features
+
+### Complex Path Construction
+
+Create paths with multiple relationships more easily using `ComplexPath`:
+
+```go
+// Define nodes
+user := cypher.Node("User").Named("u")
+company := cypher.Node("Company").Named("c")
+city := cypher.Node("City").Named("city")
+
+// Create a complex path with a single function call
+path := cypher.ComplexPath(
+    user,
+    "WORKS_AT", company,
+    "LOCATED_IN", city
+)
+
+// Use in a query
+stmt, _ := cypher.Match(path).
+    Where(cypher.Property("u", "name").Eq("John")).
+    Returning(
+        cypher.Property("u", "name"),
+        cypher.Property("city", "name")
+    ).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (u:User)-[:WORKS_AT]->(c:Company)-[:LOCATED_IN]->(city:City) WHERE u.name = $p0 RETURN u.name, city.name
+```
+
+### Simplified Property Comparison Helpers
+
+Compare properties more concisely using our comparison helpers:
+
+```go
+// Traditional approach
+query1, _ := cypher.Match(userNode).
+    Where(
+        cypher.And(
+            cypher.Gt(
+                cypher.Property("u", "age"),
+                cypher.Param(30)
+            ),
+            cypher.Eq(
+                cypher.Property("u", "active"),
+                cypher.Param(true)
+            )
+        )
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+
+// Simplified comparison using CompareProperty
+query2, _ := cypher.Match(userNode).
+    Where(
+        cypher.And(
+            cypher.CompareProperty("u", "age", ">", 30),
+            cypher.CompareProperty("u", "active", "=", true)
+        )
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+
+// Named parameters with NamedCompareProperty
+query3, _ := cypher.Match(userNode).
+    Where(
+        cypher.NamedCompareProperty("u", "age", ">", "minAge", 30)
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+```
+
+### Schema Management Helpers
+
+Create and manage database constraints and indexes:
+
+```go
+// Create a unique constraint
+uniqueConstraint, _ := schema.CreateUniqueConstraint("user_email_unique", "User", "email")
+fmt.Println(uniqueConstraint.Cypher())
+// CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (n:User) REQUIRE n.email IS UNIQUE
+
+// Create a node key constraint
+nodeKeyConstraint, _ := schema.CreateNodeKeyConstraint("user_id_key", "User", "id")
+fmt.Println(nodeKeyConstraint.Cypher())
+// CREATE CONSTRAINT user_id_key IF NOT EXISTS FOR (n:User) REQUIRE (n.id) IS NODE KEY
+
+// Create an index on multiple properties
+index, _ := schema.CreateIndex("user_name_idx", "User", "firstName", "lastName")
+fmt.Println(index.Cypher())
+// CREATE INDEX user_name_idx IF NOT EXISTS FOR (n:User) ON (n.firstName, n.lastName)
+
+// Create a full-text index
+fullTextIndex, _ := schema.CreateFullTextIndex("content_search", 
+    []string{"Post", "Comment"}, 
+    []string{"title", "content"})
+fmt.Println(fullTextIndex.Cypher())
+// CALL db.index.fulltext.createNodeIndex('content_search', ['Post', 'Comment'], ['title', 'content'])
+```
+
+### Neo4j Driver Integration
+
+Simplified query execution and result handling:
+
+```go
+// Create the session manager
+sessionManager := driver.NewSessionManager(neo4jDriver)
+queryHelper := driver.NewQueryHelper()
+ctx := context.Background()
+
+// Create a query to execute
+query, _ := cypher.Match(userNode).
+    Returning(userNode).
+    Limit(5).
+    Build()
+
+// Execute a read query and collect a single result
+result, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CollectSingle("u"))
+
+// Execute a read query and collect multiple results as a list
+listResult, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CollectList("u"))
+
+// Execute a read query and just count the results
+countResult, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CountResults())
+
+// Execute a batch of write operations in a single transaction
+statements := []core.Statement{statement1, statement2}
+batchResult, err := sessionManager.ExecuteBatchWrite(ctx, statements, 
+    func(results []neo4j.Result) (any, error) {
+        // Process results
+        return nil, nil
+    })
+```
+
 ### Properties and Conditions
 
 ```go
@@ -656,3 +795,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Recent Enhancements
+
+The library has recently been enhanced with several powerful features to make working with Neo4j and Cypher even more efficient:
+
+1. **ComplexPath Helper** - Create multi-level relationship paths more easily without nesting relationship calls.
+2. **Property Comparison Helpers** - Reduce verbosity when writing common property comparisons with `CompareProperty` and `NamedCompareProperty`.
+3. **Schema Management Helpers** - Simplify the creation and management of constraints and indexes with the `schema` package.
+4. **Neo4j Driver Integration** - Streamline query execution and result handling with the `driver` package's `SessionManager` and `QueryHelper`.
+
+See the [enhanced_features examples](examples/enhanced_features) for detailed demonstrations of these new capabilities.

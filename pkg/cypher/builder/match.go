@@ -131,10 +131,11 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 	// Collect parameters
 	paramsMap := make(map[string]any)
 
-	// Collect parameters from pattern
-	util.ExtractParameters(m.pattern, paramsMap)
+	// Extract parameters from pattern and where clause
+	if m.pattern != nil {
+		util.ExtractParameters(m.pattern, paramsMap)
+	}
 
-	// Collect parameters from where clause
 	if m.whereClause != nil {
 		util.ExtractParameters(m.whereClause, paramsMap)
 	}
@@ -146,6 +147,10 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 		parts = append(parts, "OPTIONAL MATCH")
 	} else {
 		parts = append(parts, "MATCH")
+	}
+
+	if m.pattern == nil {
+		return nil, core.NewError(core.ErrInvalidPattern, "pattern is required for MATCH clause")
 	}
 
 	parts = append(parts, m.pattern.String())
@@ -177,5 +182,6 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 
 // Helper function to extract parameters from expressions recursively (deprecated, use util.ExtractParameters instead)
 func extractParameters(expr core.Expression, paramsMap map[string]any) {
+	// This function is deprecated and should be removed in a future version
 	util.ExtractParameters(expr, paramsMap)
 }
