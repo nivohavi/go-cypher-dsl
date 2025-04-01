@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/errors"
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
@@ -58,6 +59,15 @@ func (r *returnBuilder) Desc() ReturnBuilder {
 
 // Build builds this RETURN into a complete statement
 func (r *returnBuilder) Build() (core.Statement, error) {
+	// Validate that we have expressions to return (if not using returnAll)
+	if !r.returnAll && len(r.expressions) == 0 {
+		return nil, errors.NewValidationError(
+			"no expressions to return",
+			"return builder",
+			nil,
+		)
+	}
+
 	// If this builder has a previous clause, we need to build that first
 	var prevStmt core.Statement
 	var err error
@@ -65,7 +75,11 @@ func (r *returnBuilder) Build() (core.Statement, error) {
 	if r.prev != nil {
 		prevStmt, err = r.prev.Build()
 		if err != nil {
-			return nil, err
+			return nil, errors.NewIncompleteError(
+				"failed to build previous clause",
+				"return builder",
+				err,
+			)
 		}
 	}
 
@@ -94,6 +108,15 @@ func (r *returnBuilder) Build() (core.Statement, error) {
 	}
 
 	if !r.returnAll {
+		if len(r.expressions) == 0 {
+			// This should never happen due to the validation above, but just in case
+			return nil, errors.NewIncompleteError(
+				"no expressions to return",
+				"return builder",
+				nil,
+			)
+		}
+
 		exprs := make([]string, len(r.expressions))
 		for i, expr := range r.expressions {
 			exprs[i] = expr.String()

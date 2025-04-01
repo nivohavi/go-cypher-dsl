@@ -1,10 +1,17 @@
 package core
 
+import (
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/validation"
+)
+
 // StatementImpl implements the Statement interface
 type StatementImpl struct {
-	cypher     string
-	params     map[string]any
-	parameters *Parameters
+	cypher           string
+	params           map[string]any
+	parameters       *Parameters
+	validator        *validation.Validator
+	validated        bool
+	validationErrors []error
 }
 
 // NewStatement creates a new statement with the given Cypher and params
@@ -48,6 +55,43 @@ func (s *StatementImpl) Parameters() *Parameters {
 	return s.parameters
 }
 
+// SetValidator sets a validator for this statement
+func (s *StatementImpl) SetValidator(validator *validation.Validator) {
+	s.validator = validator
+	s.validated = false
+}
+
+// Validate validates this statement using the configured validator
+func (s *StatementImpl) Validate() (bool, []error) {
+	if s.validator == nil {
+		// Create a default validator if none is set
+		s.validator = validation.DefaultValidator()
+	}
+
+	if !s.validated {
+		s.validationErrors = s.validator.ValidateQuery(s.cypher)
+		s.validated = true
+	}
+
+	return len(s.validationErrors) == 0, s.validationErrors
+}
+
+// ValidationErrors returns any validation errors found
+func (s *StatementImpl) ValidationErrors() []error {
+	if !s.validated && s.validator != nil {
+		s.Validate()
+	}
+	return s.validationErrors
+}
+
+// WithValidation creates a validated copy of this statement
+func (s *StatementImpl) WithValidation(level validation.ValidationLevel) *StatementImpl {
+	copy := *s
+	copy.validator = validation.NewValidator(validation.DefaultRules(), level)
+	copy.validated = false
+	return &copy
+}
+
 // Accept applies a visitor to this statement
 func (s *StatementImpl) Accept(visitor StatementVisitor) any {
 	return visitor.Visit(s)
@@ -59,6 +103,7 @@ func (s *StatementImpl) WithCypher(cypher string) *StatementImpl {
 		cypher:     cypher,
 		params:     s.params,
 		parameters: s.parameters,
+		validator:  s.validator,
 	}
 }
 
@@ -68,6 +113,7 @@ func (s *StatementImpl) WithParams(params map[string]any) *StatementImpl {
 		cypher:     s.cypher,
 		params:     params,
 		parameters: s.parameters,
+		validator:  s.validator,
 	}
 }
 
@@ -108,9 +154,18 @@ func (s *StatementImpl) Merge(other *StatementImpl) *StatementImpl {
 		combinedCypher += other.cypher
 	}
 
+	// Take the validator from the first statement if available
+	var mergedValidator *validation.Validator
+	if s.validator != nil {
+		mergedValidator = s.validator
+	} else if other.validator != nil {
+		mergedValidator = other.validator
+	}
+
 	return &StatementImpl{
 		cypher:     combinedCypher,
 		params:     mergedParams,
 		parameters: mergedParameters,
+		validator:  mergedValidator,
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/safety"
 )
 
 // LiteralExpression represents a literal value in a Cypher query
@@ -13,6 +15,11 @@ type LiteralExpression struct {
 
 // NewLiteral creates a new literal expression
 func NewLiteral(value any) *LiteralExpression {
+	// Check if this is a string literal and trigger warning if needed
+	if strVal, ok := value.(string); ok {
+		safety.WarnOnStringLiteral(strVal, "literal expression")
+	}
+
 	return &LiteralExpression{
 		value: value,
 	}

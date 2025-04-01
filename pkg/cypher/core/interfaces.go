@@ -1,6 +1,10 @@
 // Package core provides the foundational interfaces for the Cypher DSL
 package core
 
+import (
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/validation"
+)
+
 // Expression is the base interface for all expressions in Cypher
 type Expression interface {
 	// Accept implements the visitor pattern for traversing expressions
@@ -93,6 +97,12 @@ type Statement interface {
 	Params() map[string]any
 	// Accept applies a visitor to this statement
 	Accept(visitor StatementVisitor) any
+	// SetValidator sets a validator for this statement
+	SetValidator(validator *validation.Validator)
+	// Validate validates this statement using the configured validator
+	Validate() (bool, []error)
+	// ValidationErrors returns any validation errors found
+	ValidationErrors() []error
 }
 
 // StatementVisitor is used to visit statements in the visitor pattern
