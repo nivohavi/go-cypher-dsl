@@ -79,6 +79,58 @@ result, err := session.Run(
 )
 ```
 
+## Enhanced Features
+
+### Complex Path Construction
+
+Create paths with multiple relationships more easily using `ComplexPath`:
+
+```go
+// Using ComplexPath
+path := cypher.ComplexPath(
+    user,
+    "WORKS_AT", company,
+    "LOCATED_IN", city
+)
+```
+
+### Property Comparison Helpers
+
+The property comparison helpers reduce verbosity when writing common conditions:
+
+```go
+// Simplified comparison using CompareProperty
+cypher.CompareProperty("u", "age", ">", 30)
+
+// With named parameters
+cypher.NamedCompareProperty("u", "age", ">", "minAge", 30)
+```
+
+### Schema Management Helpers
+
+The schema package provides helpers for creating constraints and indexes:
+
+```go
+// Create a unique constraint
+uniqueConstraint, _ := schema.CreateUniqueConstraint("user_email_unique", "User", "email")
+
+// Create an index
+index, _ := schema.CreateIndex("user_name_idx", "User", "firstName", "lastName")
+```
+
+### Neo4j Driver Integration
+
+The driver package simplifies query execution and result handling:
+
+```go
+// Create the session manager
+sessionManager := driver.NewSessionManager(neo4jDriver)
+queryHelper := driver.NewQueryHelper()
+
+// Execute a read query and collect results
+result, err := sessionManager.ExecuteRead(ctx, query, queryHelper.CollectList("u"))
+```
+
 ## Best Practices
 
 ### 1. Use Named Nodes and Relationships
@@ -130,23 +182,6 @@ if err != nil {
     // Handle the error
     return nil, err
 }
-```
-
-### 5. Use Schemas for Type Safety
-
-For larger projects, define schemas to get better type safety:
-
-```go
-// Define a schema
-personSchema := cypher.NewTypedSchema("Person")
-nameProperty := personSchema.AddProperty("name")
-ageProperty := personSchema.AddProperty("age")
-
-// Create a node using the schema
-p := personSchema.Node("p")
-
-// Use schema properties
-condition := nameProperty.Of(p).Eq("Tom Hanks")
 ```
 
 ## Common Patterns
@@ -314,6 +349,15 @@ if builder.HasError() {
     fmt.Println("Error:", builder.Error())
 }
 ```
+
+## Examples
+
+For more examples, check the [examples](../../examples) directory, which includes:
+
+- `basics`: Core query building examples
+- `enhanced_features`: Advanced feature examples
+- `neo4j_integration`: Integration with Neo4j driver
+- `schema_management`: Database schema management
 
 ## Contributing
 
