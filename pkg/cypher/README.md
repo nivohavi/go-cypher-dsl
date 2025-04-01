@@ -1,163 +1,320 @@
-# Go Cypher DSL
+# go-cypher-dsl Package
 
-A fluent, type-safe domain-specific language (DSL) for building Cypher queries in Go.
+This package provides a fluent, type-safe way to build Cypher queries for Neo4j in Go. The DSL (Domain-Specific Language) approach helps reduce errors, improves maintainability, and provides better IDE support compared to string concatenation.
 
-## Features
+## Core Concepts
 
-- Fluent, chainable API that closely mirrors Cypher syntax
-- Type-safe query construction to catch errors at compile time
-- Parameter support to prevent Cypher injection
-- Pretty printing for debugging
-- Full support for all major Cypher clauses and expressions
-- Immutable builders that can be reused and composed
+### Expressions
 
-## Installation
+Everything in the DSL is based on `Expression` interfaces. An expression represents a part of a Cypher query that can be rendered as a string and may contain parameters.
 
-```bash
-go get github.com/nivohavi/go-cypher-dsl
-```
+Key expression types:
+- Node patterns: `(n:Label)`
+- Relationship patterns: `-[r:TYPE]->`
+- Property expressions: `n.property`
+- Comparison expressions: `n.property = value`
+- Logical expressions: `expr1 AND expr2`
+- Function calls: `count(n)`
 
-## Usage
+### Builders
 
-### Basic Example
+Builders provide a fluent API for constructing Cypher queries:
+- `MatchBuilder`: For building MATCH clauses
+- `CreateBuilder`: For building CREATE clauses
+- `ReturnBuilder`: For building RETURN clauses
+- `WithBuilder`: For building WITH clauses
+- and more...
+
+### Parameters
+
+Parameters are handled automatically, providing protection against Cypher injection. Parameter values can be:
+- Literal values: `"string"`, `42`, `true`
+- Variable values (from Go variables)
+- Named parameters that can be referenced in queries
+
+## Basic Usage
+
+### Creating Nodes and Relationships
 
 ```go
-package main
+// Create a node pattern
+person := cypher.Node("Person").Named("p")
 
-import (
-    "fmt"
-    "github.com/nivohavi/go-cypher-dsl/pkg2/cypher"
-)
+// Create a relationship
+movie := cypher.Node("Movie").Named("m")
+actedIn := person.RelationshipTo(movie, "ACTED_IN")
+```
 
-func main() {
-    // Build a simple query
-    query := cypher.Match(
-        cypher.Node("Person").Named("p").WithProps(map[string]interface{}{
-            "name": "John",
-        }),
-    ).
-    Return(
-        cypher.Property("p", "name"),
-        cypher.Property("p", "age"),
-    ).
+### Building Queries
+
+```go
+// Create a MATCH-RETURN query
+stmt, err := cypher.Match(person).
+    Where(person.Property("name").Eq("Tom Hanks")).
+    Returning(person).
     Build()
 
-    // Render the query for debugging
-    fmt.Println(cypher.PrettyPrint(query))
-
-    // Get the Cypher string and parameters for execution
-    cypherStr, params := cypher.RenderWithParams(query)
-    fmt.Println("Cypher:", cypherStr)
-    fmt.Println("Params:", params)
+if err != nil {
+    // Handle error
 }
+
+// Get the query string and parameters
+query := stmt.Cypher()
+params := stmt.Params()
 ```
 
-### More Complex Example
+### Using with Neo4j Driver
 
 ```go
-package main
+// Create a Neo4j session
+session := driver.NewSession(neo4j.SessionConfig{
+    AccessMode: neo4j.AccessModeRead,
+})
+defer session.Close()
 
-import (
-    "fmt"
-    "github.com/nivohavi/go-cypher-dsl/pkg2/cypher"
+// Execute the query
+result, err := session.Run(
+    stmt.Cypher(),
+    stmt.Params(),
 )
+```
 
-func main() {
-    // Create parameter container
-    params := cypher.Parameters()
+## Best Practices
 
-    // Build a more complex query with parameters
-    person := cypher.NamedNode("p", "Person")
-    movie := cypher.NamedNode("m", "Movie")
-    
-    // Create a relationship pattern
-    acted := cypher.RelateNodes(person, movie, "ACTED_IN")
-    
-    query := cypher.Match(cypher.Pattern(acted)).
-        Where(
-            cypher.And(
-                cypher.Gt(
-                    cypher.Property("m", "released"),
-                    params.Add(2000),
-                ),
-                cypher.Eq(
-                    cypher.Property("p", "name"),
-                    params.Add("Tom Hanks"),
-                ),
-            ),
-        ).
-        Return(
-            cypher.Property("m", "title"),
-            cypher.Property("m", "released"),
-        ).
-        OrderBy(cypher.Property("m", "released")).
-        Desc().
-        Build()
+### 1. Use Named Nodes and Relationships
 
-    // Print the pretty query
-    fmt.Println(cypher.PrettyPrint(query))
+Always name your nodes and relationships to make the resulting Cypher query more readable and to allow for referencing them later:
+
+```go
+// Good
+person := cypher.Node("Person").Named("p")
+
+// Avoid
+person := cypher.Node("Person") // No name
+```
+
+### 2. Use Parameter Values
+
+For better security and performance, always use parameters for values rather than string concatenation:
+
+```go
+// Good
+name := "Tom Hanks"
+condition := person.Property("name").Eq(cypher.ParamWithValue("name", name))
+
+// Avoid
+condition := person.Property("name").Eq("Tom Hanks") // Hardcoded value
+```
+
+### 3. Reuse Expressions
+
+Create expressions once and reuse them for better maintainability:
+
+```go
+// Create expressions once
+person := cypher.Node("Person").Named("p")
+nameProperty := person.Property("name")
+
+// Reuse in multiple places
+condition1 := nameProperty.Eq("Tom Hanks")
+condition2 := nameProperty.Contains("Tom")
+```
+
+### 4. Handle Errors Properly
+
+Always check for errors after building queries:
+
+```go
+stmt, err := builder.Build()
+if err != nil {
+    // Handle the error
+    return nil, err
 }
 ```
 
-## API Reference
+### 5. Use Schemas for Type Safety
 
-### Node Pattern Functions
+For larger projects, define schemas to get better type safety:
 
-- `Node(labels ...string)` - Creates a node pattern with optional labels
-- `NamedNode(alias string, labels ...string)` - Creates a named node with optional labels
-- `NodeWithProperties(properties map[string]any, labels ...string)` - Creates a node with properties
-- `NamedNodeWithProperties(alias string, properties map[string]any, labels ...string)` - Creates a named node with properties
+```go
+// Define a schema
+personSchema := cypher.NewTypedSchema("Person")
+nameProperty := personSchema.AddProperty("name")
+ageProperty := personSchema.AddProperty("age")
 
-### Relationship Functions
+// Create a node using the schema
+p := personSchema.Node("p")
 
-- `RelateNodes(left, right NodeExpression, types ...string)` - Creates a relationship between nodes
-- `RelateBidirectionally(left, right NodeExpression, types ...string)` - Creates a bidirectional relationship
+// Use schema properties
+condition := nameProperty.Of(p).Eq("Tom Hanks")
+```
 
-### Pattern Functions
+## Common Patterns
 
-- `Pattern(element PatternElement)` - Creates a pattern expression
-- `Path(alias string, element PatternElement)` - Creates a named path
+### Find Nodes by ID
 
-### Clause Functions
+```go
+person := cypher.Node("Person").Named("p")
+idCondition := person.Property("id").Eq(123)
 
-- `Match(pattern Expression)` - Creates a MATCH clause
-- `OptionalMatch(pattern Expression)` - Creates an OPTIONAL MATCH clause
-- `Where(condition Expression)` - Creates a WHERE clause
-- `With(expressions ...Expression)` - Creates a WITH clause
-- `Return(expressions ...Expression)` - Creates a RETURN clause
-- `OrderBy(expressions ...Expression)` - Creates an ORDER BY clause
-- `Limit(count int)` - Creates a LIMIT clause
-- `Skip(count int)` - Creates a SKIP clause
-- `Create(pattern Expression)` - Creates a CREATE clause
-- `Merge(pattern Expression)` - Creates a MERGE clause
-- `Delete(expressions ...Expression)` - Creates a DELETE clause
-- `DetachDelete(expressions ...Expression)` - Creates a DETACH DELETE clause
-- `Set(expression Expression)` - Creates a SET clause
-- `Remove(expression Expression)` - Creates a REMOVE clause
-- `Unwind(expression Expression, alias string)` - Creates an UNWIND clause
+stmt, _ := cypher.Match(person).
+    Where(idCondition).
+    Returning(person).
+    Build()
+```
 
-### Expression Functions
+### Create a Node with Properties
 
-- `Literal(value any)` - Creates a literal expression
-- `Param(value any)` - Creates a parameter expression
-- `NamedParam(name string, value any)` - Creates a named parameter
-- `Eq(left, right Expression)` - Creates an equality expression
-- `Ne(left, right Expression)` - Creates a not-equal expression
-- `Gt(left, right Expression)` - Creates a greater-than expression
-- `Gte(left, right Expression)` - Creates a greater-than-or-equal expression
-- `Lt(left, right Expression)` - Creates a less-than expression
-- `Lte(left, right Expression)` - Creates a less-than-or-equal expression
-- `And(left, right Expression)` - Creates a logical AND expression
-- `Or(left, right Expression)` - Creates a logical OR expression
-- `Xor(left, right Expression)` - Creates a logical XOR expression
-- `Not(expression Expression)` - Creates a logical NOT expression
+```go
+person := cypher.Node("Person").Named("p")
+personProps := person.WithProps(map[string]interface{}{
+    "name": "John Doe",
+    "age":  30,
+})
 
-### Rendering Functions
+stmt, _ := cypher.Create(personProps).
+    Returning(person).
+    Build()
+```
 
-- `Render(statement Statement)` - Renders a statement to a Cypher string
-- `RenderWithParams(statement Statement)` - Renders a statement and returns Cypher and parameters
-- `PrettyPrint(statement Statement)` - Renders a statement with pretty printing
+### Create a Relationship
 
-## License
+```go
+person := cypher.Node("Person").Named("p")
+movie := cypher.Node("Movie").Named("m")
+actedIn := person.RelationshipTo(movie, "ACTED_IN")
 
-MIT 
+stmt, _ := cypher.Match(person).
+    Where(person.Property("name").Eq("Tom Hanks")).
+    Match(movie).
+    Where(movie.Property("title").Eq("Forrest Gump")).
+    Create(actedIn).
+    Returning(person, movie).
+    Build()
+```
+
+### Pagination
+
+```go
+person := cypher.Node("Person").Named("p")
+
+stmt, _ := cypher.Match(person).
+    Returning(person).
+    OrderBy(person.Property("name")).
+    Skip(20).
+    Limit(10).
+    Build()
+```
+
+### Aggregation
+
+```go
+movie := cypher.Node("Movie").Named("m")
+director := cypher.Node("Person").Named("d")
+directedRel := movie.RelationshipTo(director, "DIRECTED_BY")
+
+stmt, _ := cypher.Match(cypher.Pattern(movie, directedRel, director)).
+    Returning(
+        director.Property("name"),
+        cypher.Count(movie).As("movieCount"),
+    ).
+    OrderBy(cypher.Desc(cypher.Var("movieCount"))).
+    Limit(10).
+    Build()
+```
+
+## Advanced Features
+
+### Path Variables
+
+```go
+// Define path pattern
+person1 := cypher.Node("Person").Named("p1")
+person2 := cypher.Node("Person").Named("p2")
+movie := cypher.Node("Movie").Named("m")
+
+path := cypher.Path(
+    person1,
+    person1.RelationshipTo(movie, "ACTED_IN"),
+    movie,
+    movie.RelationshipTo(person2, "ACTED_IN"),
+    person2,
+).Named("path")
+
+stmt, _ := cypher.Match(path).
+    Where(person1.Property("name").Eq("Tom Hanks")).
+    And(person2.Property("name").Eq("Kevin Bacon")).
+    Returning(path).
+    Build()
+```
+
+### Unwind Operations
+
+```go
+names := []string{"Tom Hanks", "Tom Cruise", "Tom Holland"}
+namesParam := cypher.ParamWithValue("names", names)
+
+person := cypher.Node("Person").Named("p")
+
+stmt, _ := cypher.Unwind(namesParam, "name").
+    Match(person).
+    Where(person.Property("name").Eq(cypher.Var("name"))).
+    Returning(person).
+    Build()
+```
+
+### Subqueries
+
+```go
+// Main query
+person := cypher.Node("Person").Named("p")
+movie := cypher.Node("Movie").Named("m")
+actedIn := person.RelationshipTo(movie, "ACTED_IN")
+
+// Build with a subquery using WITH
+stmt, _ := cypher.Match(person).
+    Where(person.Property("name").Eq("Tom Hanks")).
+    With(person).
+    Match(cypher.Pattern(person, actedIn, movie)).
+    Returning(movie).
+    Build()
+```
+
+## Formatting
+
+The library includes a formatter for pretty-printing Cypher queries:
+
+```go
+// Get the query string
+query := stmt.Cypher()
+
+// Format with default options
+formatted := cypher.PrettyPrint(query)
+
+// Format with custom options
+formatter := cypher.NewCypherFormatter(cypher.FormattingOptions{
+    IndentString:     "    ",  // 4 spaces
+    KeywordCase:      cypher.KeywordCaseUpper,
+    ClauseNewline:    true,
+    IndentSubClauses: true,
+})
+formatted = formatter.Format(query)
+```
+
+## Error Handling
+
+Errors are accumulated during query building:
+
+```go
+builder := cypher.Match(person).
+    Where(person.Property("name").Eq("Tom Hanks")).
+    Returning() // Error: empty return clause
+
+if builder.HasError() {
+    fmt.Println("Error:", builder.Error())
+}
+```
+
+## Contributing
+
+Contributions to improve the DSL are welcome! Please see the main project README for guidelines. 

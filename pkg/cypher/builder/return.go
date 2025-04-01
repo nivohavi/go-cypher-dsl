@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
 // returnBuilder implements the ReturnBuilder interface
@@ -73,12 +74,12 @@ func (r *returnBuilder) Build() (core.Statement, error) {
 
 	// Extract parameters from expressions
 	for _, expr := range r.expressions {
-		extractParameters(expr, paramsMap)
+		util.ExtractParameters(expr, paramsMap)
 	}
 
 	// Extract parameters from ORDER BY expressions if present
 	for _, expr := range r.orderBy {
-		extractParameters(expr, paramsMap)
+		util.ExtractParameters(expr, paramsMap)
 	}
 
 	// Build RETURN clause

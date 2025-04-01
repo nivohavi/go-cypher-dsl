@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
 // createBuilder implements the CreateBuilder interface
@@ -61,7 +62,7 @@ func (c *createBuilder) Build() (core.Statement, error) {
 	paramsMap := make(map[string]any)
 
 	// Extract parameters from pattern
-	extractParameters(c.pattern, paramsMap)
+	util.ExtractParameters(c.pattern, paramsMap)
 
 	// Build CREATE clause
 	parts := []string{"CREATE", c.pattern.String()}
