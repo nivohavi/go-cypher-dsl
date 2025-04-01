@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
 // withBuilder implements the WithBuilder interface
@@ -171,17 +172,17 @@ func (w *withBuilder) Build() (core.Statement, error) {
 
 	// Extract parameters from expressions
 	for _, expr := range w.expressions {
-		extractParameters(expr, paramsMap)
+		util.ExtractParameters(expr, paramsMap)
 	}
 
 	// Extract parameters from WHERE clause if present
 	if w.whereClause != nil {
-		extractParameters(w.whereClause, paramsMap)
+		util.ExtractParameters(w.whereClause, paramsMap)
 	}
 
 	// Extract parameters from ORDER BY expressions if present
 	for _, expr := range w.orderBy {
-		extractParameters(expr, paramsMap)
+		util.ExtractParameters(expr, paramsMap)
 	}
 
 	// Build WITH clause

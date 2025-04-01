@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
 // setBuilder implements the SetBuilder interface
@@ -59,7 +60,7 @@ func (s *setBuilder) Build() (core.Statement, error) {
 		exprStrings[i] = expr.String()
 
 		// Collect parameters from the expression if it's a parameter expression
-		extractParameters(expr, paramsMap)
+		util.ExtractParameters(expr, paramsMap)
 	}
 
 	parts = append(parts, strings.Join(exprStrings, ", "))

@@ -44,6 +44,26 @@ func main() {
 }
 ```
 
+## Examples
+
+Check out the [examples](examples/) directory for comprehensive examples covering various usage patterns:
+
+```
+examples/
+├── basics/              # Core query building examples using improved API
+├── enhanced_features/   # Examples showcasing new advanced features
+├── neo4j_integration/   # Examples of Neo4j database integration
+└── schema_management/   # Examples of schema management (constraints and indexes)
+```
+
+To run an example:
+
+```bash
+# Run the basic query building example
+cd examples/basics
+go run query_building.go
+```
+
 ## Core Concepts
 
 ### Nodes and Relationships
@@ -68,6 +88,145 @@ fmt.Println(query.Cypher())
 // MATCH (p:`Person`)-[r:`ACTED_IN`]->(m:`Movie`) RETURN p, m
 ```
 
+## Enhanced Features
+
+### Complex Path Construction
+
+Create paths with multiple relationships more easily using `ComplexPath`:
+
+```go
+// Define nodes
+user := cypher.Node("User").Named("u")
+company := cypher.Node("Company").Named("c")
+city := cypher.Node("City").Named("city")
+
+// Create a complex path with a single function call
+path := cypher.ComplexPath(
+    user,
+    "WORKS_AT", company,
+    "LOCATED_IN", city
+)
+
+// Use in a query
+stmt, _ := cypher.Match(path).
+    Where(cypher.Property("u", "name").Eq("John")).
+    Returning(
+        cypher.Property("u", "name"),
+        cypher.Property("city", "name")
+    ).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (u:User)-[:WORKS_AT]->(c:Company)-[:LOCATED_IN]->(city:City) WHERE u.name = $p0 RETURN u.name, city.name
+```
+
+### Simplified Property Comparison Helpers
+
+Compare properties more concisely using our comparison helpers:
+
+```go
+// Traditional approach
+query1, _ := cypher.Match(userNode).
+    Where(
+        cypher.And(
+            cypher.Gt(
+                cypher.Property("u", "age"),
+                cypher.Param(30)
+            ),
+            cypher.Eq(
+                cypher.Property("u", "active"),
+                cypher.Param(true)
+            )
+        )
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+
+// Simplified comparison using CompareProperty
+query2, _ := cypher.Match(userNode).
+    Where(
+        cypher.And(
+            cypher.CompareProperty("u", "age", ">", 30),
+            cypher.CompareProperty("u", "active", "=", true)
+        )
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+
+// Named parameters with NamedCompareProperty
+query3, _ := cypher.Match(userNode).
+    Where(
+        cypher.NamedCompareProperty("u", "age", ">", "minAge", 30)
+    ).
+    Returning(cypher.Property("u", "name")).
+    Build()
+```
+
+### Schema Management Helpers
+
+Create and manage database constraints and indexes:
+
+```go
+// Create a unique constraint
+uniqueConstraint, _ := schema.CreateUniqueConstraint("user_email_unique", "User", "email")
+fmt.Println(uniqueConstraint.Cypher())
+// CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (n:User) REQUIRE n.email IS UNIQUE
+
+// Create a node key constraint
+nodeKeyConstraint, _ := schema.CreateNodeKeyConstraint("user_id_key", "User", "id")
+fmt.Println(nodeKeyConstraint.Cypher())
+// CREATE CONSTRAINT user_id_key IF NOT EXISTS FOR (n:User) REQUIRE (n.id) IS NODE KEY
+
+// Create an index on multiple properties
+index, _ := schema.CreateIndex("user_name_idx", "User", "firstName", "lastName")
+fmt.Println(index.Cypher())
+// CREATE INDEX user_name_idx IF NOT EXISTS FOR (n:User) ON (n.firstName, n.lastName)
+
+// Create a full-text index
+fullTextIndex, _ := schema.CreateFullTextIndex("content_search", 
+    []string{"Post", "Comment"}, 
+    []string{"title", "content"})
+fmt.Println(fullTextIndex.Cypher())
+// CALL db.index.fulltext.createNodeIndex('content_search', ['Post', 'Comment'], ['title', 'content'])
+```
+
+### Neo4j Driver Integration
+
+Simplified query execution and result handling:
+
+```go
+// Create the session manager
+sessionManager := driver.NewSessionManager(neo4jDriver)
+queryHelper := driver.NewQueryHelper()
+ctx := context.Background()
+
+// Create a query to execute
+query, _ := cypher.Match(userNode).
+    Returning(userNode).
+    Limit(5).
+    Build()
+
+// Execute a read query and collect a single result
+result, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CollectSingle("u"))
+
+// Execute a read query and collect multiple results as a list
+listResult, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CollectList("u"))
+
+// Execute a read query and just count the results
+countResult, err := sessionManager.ExecuteRead(ctx, query, 
+    queryHelper.CountResults())
+
+// Execute a batch of write operations in a single transaction
+statements := []core.Statement{statement1, statement2}
+batchResult, err := sessionManager.ExecuteBatchWrite(ctx, statements, 
+    func(results []neo4j.Result) (any, error) {
+        // Process results
+        return nil, nil
+    })
+```
+
 ### Properties and Conditions
 
 ```go
@@ -90,6 +249,87 @@ fmt.Println(query.Cypher())
 // MATCH (p:`Person`) WHERE p.name = 'Tom Hanks' AND p.born > 1950 RETURN p
 ```
 
+## Common Query Patterns
+
+### Basic MATCH-RETURN
+
+```go
+person := cypher.Node("Person").Named("p")
+
+stmt, _ := cypher.Match(person).
+    Returning(person).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (p:`Person`) RETURN p
+```
+
+### Filtering with WHERE
+
+```go
+person := cypher.Node("Person").Named("p")
+
+stmt, _ := cypher.Match(person).
+    Where(person.Property("name").Eq("Tom Hanks").
+        Or(person.Property("name").Eq("Tom Cruise"))).
+    Returning(person).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (p:`Person`) WHERE p.name = 'Tom Hanks' OR p.name = 'Tom Cruise' RETURN p
+```
+
+### Relationship Patterns
+
+```go
+person := cypher.Node("Person").Named("p")
+movie := cypher.Node("Movie").Named("m")
+acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
+
+stmt, _ := cypher.Match(cypher.Pattern(person, acted, movie)).
+    Where(movie.Property("title").Eq("The Matrix")).
+    Returning(person.Property("name")).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (p:`Person`)-[r:`ACTED_IN`]->(m:`Movie`) WHERE m.title = 'The Matrix' RETURN p.name
+```
+
+### Creating Data
+
+```go
+person := cypher.Node("Person").Named("p")
+personProps := person.WithProps(map[string]interface{}{
+    "name": "Keanu Reeves",
+    "born": 1964,
+})
+
+stmt, _ := cypher.Create(personProps).
+    Returning(person).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// CREATE (p:`Person` {name: 'Keanu Reeves', born: 1964}) RETURN p
+```
+
+### Merging Data
+
+```go
+person := cypher.Node("Person").Named("p")
+personProps := person.WithProps(map[string]interface{}{
+    "name": "Keanu Reeves",
+})
+
+stmt, _ := cypher.Merge(personProps).
+    OnCreate(cypher.Set(cypher.Property("p", "created").Eq(2023))).
+    OnMatch(cypher.Set(cypher.Property("p", "updated").Eq(2023))).
+    Returning(person).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MERGE (p:`Person` {name: 'Keanu Reeves'}) ON CREATE SET p.created = 2023 ON MATCH SET p.updated = 2023 RETURN p
+```
+
 ## Features
 
 ### Error Handling
@@ -107,547 +347,36 @@ if builder.HasError() {
 }
 ```
 
-### Type Conversion
+### Pretty Printing
 
-The library automatically converts Go values to Cypher expressions:
-
-```go
-// Values are automatically converted to appropriate Cypher expressions
-condition := person.Property("born").Gt(1950)
-
-// Use parameters for query parameterization
-paramCondition := movie.Property("released").Gt(cypher.ParamWithValue("year", 2000))
-
-// Arrays are handled nicely too
-genres := []string{"Action", "Drama"}
-inGenres := movie.Property("genres").In(genres)
-```
-
-### Property Shorthand
-
-Use `Prop()` as a shorter alternative to `Property()`:
+Format your Cypher queries for better readability:
 
 ```go
-// These are equivalent
-person.Property("name").Eq("Tom Hanks")
-person.Prop("name").Eq("Tom Hanks")
-```
-
-### Schema-First Approach
-
-Define schemas for better type safety:
-
-```go
-// Define a schema
-personSchema := cypher.NewTypedSchema("Person")
-nameProperty := personSchema.AddProperty("name")
-ageProperty := personSchema.AddProperty("age")
-
-// Create a node using the schema
-p := personSchema.Node("p")
-
-// Build a query using schema properties
-stmt, _ := cypher.Match(p).
-    Where(nameProperty.Of(p).Eq("Tom Hanks")).
-    Returning(ageProperty.Of(p)).
-    Build()
-
-fmt.Println(stmt.Cypher())
-// MATCH (p:`Person`) WHERE p.name = 'Tom Hanks' RETURN p.age
-```
-
-## Common Query Patterns
-
-### Finding Nodes
-
-```go
-// Find nodes by properties
-findQuery := cypher.FindNodesByProperties("Person", map[string]interface{}{
-    "name": "Tom Hanks",
-    "born": 1956,
-})
-
-fmt.Println(findQuery.Cypher())
-// MATCH (n:`Person`) WHERE n.name = 'Tom Hanks' AND n.born = 1956 RETURN n
-```
-
-### Creating Nodes
-
-```go
-// Create a node with properties
-person := cypher.Node("Person").Named("p")
-
-// Set properties using a map
-personWithProps := person.WithProps(map[string]interface{}{
-    "name": "John Doe",
-    "age":  30,
-})
-
-// Build the query
-stmt, _ := cypher.Create(personWithProps).
-    Returning(personWithProps).
-    Build()
-
-fmt.Println(stmt.Cypher())
-// CREATE (p:`Person` {name: 'John Doe', age: 30}) RETURN p
-```
-
-### Creating Relationships
-
-```go
-// Create relationship between nodes
-person := cypher.Node("Person").Named("p")
-movie := cypher.Node("Movie").Named("m")
-
-// Create a relationship pattern
-actedIn := person.RelationshipTo(movie, "ACTED_IN")
-
-// Add properties to the relationship
-actedInWithProps := actedIn.WithProps(map[string]interface{}{
-    "role": "Neo",
-})
-
-// Create a pattern with the relationship
-pattern := cypher.Pattern(person, actedInWithProps, movie)
-
-// Build the query
-stmt, _ := cypher.Create(pattern).
-    Returning(person, actedInWithProps, movie).
-    Build()
-
-fmt.Println(stmt.Cypher())
-// CREATE (p:`Person`)-[:`ACTED_IN` {role: 'Neo'}]->(m:`Movie`) RETURN p, r, m
-```
-
-### Deleting Nodes
-
-```go
-// Delete a node
-person := cypher.Node("Person").Named("p")
-
-// Create a delete statement
-deleteStmt, _ := cypher.Delete(person).Build()
-
-// For detach delete
-detachDeleteStmt, _ := cypher.DetachDelete(person).Build()
-```
-
-## Advanced Examples
-
-### Complex Query with Multiple Clauses
-
-```go
-person := cypher.Node("Person").Named("p")
-movie := cypher.Node("Movie").Named("m")
-acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
-
-// Create the pattern
-pattern := cypher.Pattern(person, acted, movie)
-
-// Create a count expression
-rolesCount := cypher.As(cypher.Function("count", acted), "roles")
-
-stmt, _ := cypher.Match(pattern).
-    Where(person.Property("name").Eq("Tom Hanks")).
-    With(person, movie, rolesCount).
-    Where(cypher.Name("roles").Gt(1)).
-    Returning(movie.Property("title"), cypher.Name("roles")).
-    OrderBy(cypher.Desc(cypher.Name("roles"))).
+// Build a complex query
+stmt, _ := cypher.Match(pattern1).
+    Where(condition1).
+    With(expressions...).
+    Match(pattern2).
+    Where(condition2).
+    Returning(returnExpressions...).
+    OrderBy(orderByExpressions...).
     Limit(10).
     Build()
 
-fmt.Println(stmt.Cypher())
-// MATCH (p:`Person`)-[r:`ACTED_IN`]->(m:`Movie`) 
-// WHERE p.name = 'Tom Hanks' 
-// WITH p, m, count(r) AS roles 
-// WHERE roles > 1 
-// RETURN m.title, roles 
-// ORDER BY roles DESC 
-// LIMIT 10
+// Format the query with the pretty printer
+formattedQuery := cypher.PrettyPrint(stmt.Cypher())
+fmt.Println(formattedQuery)
+/*
+MATCH (p:`Person`)-[r:`ACTED_IN`]->(m:`Movie`)
+WHERE p.name = 'Tom Hanks'
+WITH p, m
+MATCH (m)-[d:`DIRECTED_BY`]->(director:`Person`)
+WHERE director.name = 'Steven Spielberg'
+RETURN p.name, m.title, director.name
+ORDER BY m.year DESC
+LIMIT 10
+*/
 ```
-
-### Finding Co-actors Pattern
-
-```go
-// Tom Hanks' co-actors pattern
-tom := cypher.Node("Person").Named("tom")
-movie := cypher.Node("Movie").Named("m")
-coActors := cypher.Node("Person").Named("coActors")
-
-// Create the complex relationship pattern
-tomToMovie := tom.RelationshipTo(movie, "ACTED_IN")
-movieToCoActors := movie.RelationshipFrom(coActors, "ACTED_IN")
-
-// Create the path pattern with both relationships
-path := cypher.Pattern(tom, tomToMovie, movie, movieToCoActors, coActors)
-
-stmt, _ := cypher.Match(path).
-    Where(tom.Property("name").Eq("Tom Hanks")).
-    Returning(coActors.Property("name")).
-    Build()
-
-fmt.Println(stmt.Cypher())
-// MATCH (tom:`Person`)-[:`ACTED_IN`]->(m:`Movie`)<-[:`ACTED_IN`]-(coActors:`Person`) 
-// WHERE tom.name = 'Tom Hanks' 
-// RETURN coActors.name
-```
-
-## Integration with Neo4j Driver
-
-### Basic Query Execution
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/neo4j/neo4j-go-driver/v4/neo4j"
-    "github.com/nivohavi/go-cypher-dsl/pkg/cypher"
-)
-
-func main() {
-    // Create driver
-    driver, err := neo4j.NewDriver("neo4j://localhost:7687", 
-        neo4j.BasicAuth("neo4j", "password", ""))
-    if err != nil {
-        panic(err)
-    }
-    defer driver.Close()
-
-    session := driver.NewSession(neo4j.SessionConfig{})
-    defer session.Close()
-
-    // Build query with go-cypher-dsl
-    person := cypher.Node("Person").Named("p")
-    movie := cypher.Node("Movie").Named("m")
-    acted := person.RelationshipTo(movie, "ACTED_IN").Named("r")
-    
-    // Create the pattern
-    pattern := cypher.Pattern(person, acted, movie)
-    
-    // Build the statement
-    stmt, _ := cypher.Match(pattern).
-        Where(person.Property("name").Eq("Tom Hanks")).
-        Returning(
-            cypher.As(movie.Property("title"), "title"),
-            cypher.As(acted.Property("role"), "role"),
-        ).
-        Build()
-    
-    // Execute the query
-    result, err := session.Run(
-        stmt.Cypher(),
-        stmt.Params(),
-    )
-    
-    if err != nil {
-        panic(err)
-    }
-    
-    // Process results
-    for result.Next() {
-        record := result.Record()
-        title, _ := record.Get("title")
-        role, _ := record.Get("role")
-        fmt.Printf("Movie: %s, Role: %s\n", title, role)
-    }
-}
-```
-
-### Working with Transactions
-
-```go
-func createMovieWithActors(driver neo4j.Driver, movieTitle string, releaseYear int, actors []Actor) error {
-    session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-    defer session.Close()
-    
-    // Execute within a transaction
-    _, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
-        // Create movie node
-        movieNode := cypher.Node("Movie").Named("m")
-        movieWithProps := movieNode.WithProps(map[string]interface{}{
-            "title": movieTitle,
-            "released": releaseYear,
-        })
-        
-        // Create the movie
-        createMovieStmt, err := cypher.Create(movieWithProps).
-            Returning(movieNode).
-            Build()
-            
-        if err != nil {
-            return nil, err
-        }
-        
-        // Execute movie creation
-        result, err := tx.Run(createMovieStmt.Cypher(), createMovieStmt.Params())
-        if err != nil {
-            return nil, err
-        }
-        
-        // Create actors and relationships
-        for _, actor := range actors {
-            // Create/merge actor node
-            actorNode := cypher.Node("Person").Named("p")
-            mergeActorStmt, err := cypher.Merge(actorNode.WithProps(map[string]interface{}{
-                "name": actor.Name,
-            })).Returning(actorNode).Build()
-            
-            if err != nil {
-                return nil, err
-            }
-            
-            // Execute actor merge
-            _, err = tx.Run(mergeActorStmt.Cypher(), mergeActorStmt.Params())
-            if err != nil {
-                return nil, err
-            }
-            
-            // Create relationship
-            actedInRel := actorNode.RelationshipTo(movieNode, "ACTED_IN").WithProps(map[string]interface{}{
-                "role": actor.Role,
-            })
-            
-            // Build relationship creation
-            createRelStmt, err := cypher.Match(movieNode).
-                Where(movieNode.Property("title").Eq(movieTitle)).
-                Match(actorNode).
-                Where(actorNode.Property("name").Eq(actor.Name)).
-                Create(cypher.Pattern(actorNode, actedInRel, movieNode)).
-                Build()
-                
-            if err != nil {
-                return nil, err
-            }
-            
-            // Execute relationship creation
-            _, err = tx.Run(createRelStmt.Cypher(), createRelStmt.Params())
-            if err != nil {
-                return nil, err
-            }
-        }
-        
-        return result.Single(), nil
-    })
-    
-    return err
-}
-
-type Actor struct {
-    Name string
-    Role string
-}
-
-// Usage:
-// actors := []Actor{
-//     {Name: "Tom Hanks", Role: "Forrest"},
-//     {Name: "Robin Wright", Role: "Jenny"},
-// }
-// err := createMovieWithActors(driver, "Forrest Gump", 1994, actors)
-```
-
-### Parameterized Queries with Dynamic Conditions
-
-```go
-func findMoviesByFilters(session neo4j.Session, filters MovieFilters) ([]Movie, error) {
-    // Create the base query
-    movie := cypher.Node("Movie").Named("m")
-    matchBuilder := cypher.Match(movie)
-    
-    // Build dynamic conditions based on filters
-    var conditions []cypher.BooleanExpression
-    
-    if filters.Title != "" {
-        conditions = append(conditions, 
-            movie.Property("title").Contains(filters.Title))
-    }
-    
-    if filters.MinYear > 0 {
-        conditions = append(conditions, 
-            movie.Property("released").Gte(filters.MinYear))
-    }
-    
-    if filters.MaxYear > 0 {
-        conditions = append(conditions, 
-            movie.Property("released").Lte(filters.MaxYear))
-    }
-    
-    if len(filters.Genres) > 0 {
-        // Array containment check
-        conditions = append(conditions,
-            movie.Property("genres").In(filters.Genres))
-    }
-    
-    if filters.DirectorName != "" {
-        // Add relationship condition with director
-        director := cypher.Node("Person").Named("d")
-        directedRel := director.RelationshipTo(movie, "DIRECTED")
-        
-        // Build the pattern with an additional match
-        matchBuilder = matchBuilder.Match(cypher.Pattern(director, directedRel, movie))
-        conditions = append(conditions, 
-            director.Property("name").Eq(filters.DirectorName))
-    }
-    
-    // Combine all conditions with AND
-    if len(conditions) > 0 {
-        var condition cypher.BooleanExpression = conditions[0]
-        for i := 1; i < len(conditions); i++ {
-            condition = condition.And(conditions[i])
-        }
-        matchBuilder = matchBuilder.Where(condition)
-    }
-    
-    // Add return and limit
-    stmt, err := matchBuilder.
-        Returning(movie).
-        Limit(filters.Limit).
-        Build()
-        
-    if err != nil {
-        return nil, err
-    }
-    
-    // Execute the query
-    result, err := session.Run(stmt.Cypher(), stmt.Params())
-    if err != nil {
-        return nil, err
-    }
-    
-    // Process results
-    var movies []Movie
-    for result.Next() {
-        record := result.Record()
-        movieNode, _ := record.Get("m")
-        
-        // Convert Neo4j Node to Movie struct
-        movie := nodeToMovie(movieNode.(neo4j.Node))
-        movies = append(movies, movie)
-    }
-    
-    return movies, nil
-}
-
-type MovieFilters struct {
-    Title        string
-    MinYear      int
-    MaxYear      int
-    Genres       []string
-    DirectorName string
-    Limit        int
-}
-
-type Movie struct {
-    Title    string
-    Released int
-    Genres   []string
-    // Other properties...
-}
-
-func nodeToMovie(node neo4j.Node) Movie {
-    props := node.Props()
-    
-    // Extract genres as string slice
-    var genres []string
-    if genresValue, ok := props["genres"].([]interface{}); ok {
-        for _, g := range genresValue {
-            if genre, ok := g.(string); ok {
-                genres = append(genres, genre)
-            }
-        }
-    }
-    
-    // Create movie from node properties
-    return Movie{
-        Title:    props["title"].(string),
-        Released: int(props["released"].(int64)),
-        Genres:   genres,
-    }
-}
-
-// Usage:
-// filters := MovieFilters{
-//     MinYear: 1990,
-//     MaxYear: 2000,
-//     DirectorName: "Steven Spielberg",
-//     Limit: 5,
-// }
-// movies, err := findMoviesByFilters(session, filters)
-```
-
-### Path Aggregation and Shortest Path
-
-```go
-func findShortestPath(session neo4j.Session, startActorName, endActorName string) ([]string, error) {
-    // Define nodes
-    startActor := cypher.Node("Person").Named("start")
-    endActor := cypher.Node("Person").Named("end")
-    
-    // Create a variable length path between actors
-    // This uses a Cypher shortestPath function
-    pathExpr := cypher.Function("shortestPath", cypher.PatternPath(
-        startActor,
-        startActor.RelationshipTo(endActor, "*").Named("r").WithProps(map[string]interface{}{
-            "length": "*",  // Variable length path
-        }),
-        endActor,
-    ))
-    
-    // Build the query
-    stmt, err := cypher.Match(startActor).
-        Where(startActor.Property("name").Eq(startActorName)).
-        Match(endActor).
-        Where(endActor.Property("name").Eq(endActorName)).
-        With(startActor, endActor).
-        Match(cypher.As(pathExpr, "p")).
-        Returning(cypher.Name("p")).
-        Build()
-        
-    if err != nil {
-        return nil, err
-    }
-    
-    // Execute the query
-    result, err := session.Run(stmt.Cypher(), stmt.Params())
-    if err != nil {
-        return nil, err
-    }
-    
-    // Process result
-    if result.Next() {
-        record := result.Record()
-        path, _ := record.Get("p")
-        
-        // Extract node names from path
-        return extractPathNodeNames(path.(neo4j.Path)), nil
-    }
-    
-    return nil, fmt.Errorf("no path found between %s and %s", startActorName, endActorName)
-}
-
-func extractPathNodeNames(path neo4j.Path) []string {
-    var names []string
-    
-    // Add all node names from the path
-    for _, node := range path.Nodes() {
-        if name, ok := node.Props()["name"].(string); ok {
-            names = append(names, name)
-        }
-    }
-    
-    return names
-}
-
-// Usage:
-// path, err := findShortestPath(session, "Kevin Bacon", "Tom Hanks")
-// if err == nil {
-//     fmt.Println("Bacon path:", strings.Join(path, " -> "))
-// }
-```
-
-## Examples
-
-For more examples, check the [examples](./examples) directory.
 
 ## Contributing
 

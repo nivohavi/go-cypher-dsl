@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/core"
+	"github.com/nivohavi/go-cypher-dsl/pkg/cypher/internal/util"
 )
 
 // matchBuilder implements the MatchBuilder interface
@@ -130,12 +131,13 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 	// Collect parameters
 	paramsMap := make(map[string]any)
 
-	// Collect parameters from pattern
-	extractParameters(m.pattern, paramsMap)
+	// Extract parameters from pattern and where clause
+	if m.pattern != nil {
+		util.ExtractParameters(m.pattern, paramsMap)
+	}
 
-	// Collect parameters from where clause
 	if m.whereClause != nil {
-		extractParameters(m.whereClause, paramsMap)
+		util.ExtractParameters(m.whereClause, paramsMap)
 	}
 
 	// Build MATCH clause
@@ -145,6 +147,10 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 		parts = append(parts, "OPTIONAL MATCH")
 	} else {
 		parts = append(parts, "MATCH")
+	}
+
+	if m.pattern == nil {
+		return nil, core.NewError(core.ErrInvalidPattern, "pattern is required for MATCH clause")
 	}
 
 	parts = append(parts, m.pattern.String())
@@ -174,38 +180,8 @@ func (m *matchBuilder) Build() (core.Statement, error) {
 	return core.NewStatement(query, paramsMap), nil
 }
 
-// Helper function to extract parameters from expressions recursively
+// Helper function to extract parameters from expressions recursively (deprecated, use util.ExtractParameters instead)
 func extractParameters(expr core.Expression, paramsMap map[string]any) {
-	if expr == nil {
-		return
-	}
-
-	// Handle direct parameter expressions
-	if paramExpr, ok := expr.(interface {
-		Name() string
-		Value() any
-	}); ok {
-		paramsMap[paramExpr.Name()] = paramExpr.Value()
-		return
-	}
-
-	// Handle expression containers
-	if container, ok := expr.(interface{ Expressions() []core.Expression }); ok {
-		for _, subExpr := range container.Expressions() {
-			extractParameters(subExpr, paramsMap)
-		}
-	}
-
-	// Handle binary expressions (like comparisons)
-	if binaryExpr, ok := expr.(interface {
-		Left() core.Expression
-		Right() core.Expression
-	}); ok {
-		if binaryExpr.Left() != nil {
-			extractParameters(binaryExpr.Left(), paramsMap)
-		}
-		if binaryExpr.Right() != nil {
-			extractParameters(binaryExpr.Right(), paramsMap)
-		}
-	}
+	// This function is deprecated and should be removed in a future version
+	util.ExtractParameters(expr, paramsMap)
 }

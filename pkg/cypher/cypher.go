@@ -88,6 +88,44 @@ func RelateBidirectionally(fromNode core.NodeExpression, toNode core.NodeExpress
 	return rel
 }
 
+// ComplexPath creates a path with multiple relationships in sequence
+// This is useful for creating more complex patterns without nesting multiple calls
+// Example: ComplexPath(user, "WORKS_FOR", company, "LOCATED_IN", city)
+// Creates pattern: (user)-[:WORKS_FOR]->(company)-[:LOCATED_IN]->(city)
+func ComplexPath(startNode core.NodeExpression, elementsInPath ...interface{}) core.Expression {
+	if len(elementsInPath) < 2 || len(elementsInPath)%2 != 0 {
+		panic("ComplexPath requires at least one relationship type and node pair, and must have an even number of elements")
+	}
+
+	var elements []core.PatternElement
+	currentNode := startNode
+
+	// Add the start node
+	elements = append(elements, currentNode)
+
+	// Process the path pairs: [relType, node, relType, node, ...]
+	for i := 0; i < len(elementsInPath); i += 2 {
+		relType, ok := elementsInPath[i].(string)
+		if !ok {
+			panic("Relationship type must be a string")
+		}
+
+		nextNode, ok := elementsInPath[i+1].(core.NodeExpression)
+		if !ok {
+			panic("Path elements must alternate between relationship types (string) and nodes")
+		}
+
+		// Create the relationship and add it to elements
+		rel := currentNode.RelationshipTo(nextNode, relType)
+		elements = append(elements, rel)
+
+		// Update current node for next iteration
+		currentNode = nextNode
+	}
+
+	return ast.Path(elements...)
+}
+
 // Match creates a MATCH clause
 func Match(pattern core.Expression) builder.MatchBuilder {
 	return builder.Match(pattern)
@@ -213,7 +251,100 @@ func Not(expression core.Expression) core.Expression {
 	return expr.Not(expression)
 }
 
-// Render renders a statement using the default renderer
+// CompareProperty creates a fluent comparison condition between a property and a parameter value
+// This simplifies common property comparisons by automatically creating both the property access
+// and parameter in one call.
+// Example: CompareProperty("n", "age", ">=", 30) -> n.age >= $param
+func CompareProperty(entity, property, operator string, value any) core.Expression {
+	propExpr := Property(entity, property)
+	paramExpr := Param(value)
+
+	switch operator {
+	case "=", "==":
+		return Eq(propExpr, paramExpr)
+	case "!=", "<>":
+		return Ne(propExpr, paramExpr)
+	case ">":
+		return Gt(propExpr, paramExpr)
+	case ">=":
+		return Gte(propExpr, paramExpr)
+	case "<":
+		return Lt(propExpr, paramExpr)
+	case "<=":
+		return Lte(propExpr, paramExpr)
+	case "IN":
+		// For IN, value should be a slice or array
+		return expr.In(propExpr, value)
+	case "CONTAINS":
+		// For CONTAINS, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.Contains(propExpr, strVal)
+		}
+		panic("CONTAINS operator requires a string value")
+	case "STARTS WITH":
+		// For STARTS WITH, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.StartsWith(propExpr, strVal)
+		}
+		panic("STARTS WITH operator requires a string value")
+	case "ENDS WITH":
+		// For ENDS WITH, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.EndsWith(propExpr, strVal)
+		}
+		panic("ENDS WITH operator requires a string value")
+	default:
+		panic("Unsupported operator: " + operator)
+	}
+}
+
+// NamedCompareProperty creates a fluent comparison condition between a property and a named parameter
+// Similar to CompareProperty but uses a named parameter
+// Example: NamedCompareProperty("n", "age", ">=", "minAge", 30) -> n.age >= $minAge
+func NamedCompareProperty(entity, property, operator, paramName string, value any) core.Expression {
+	propExpr := Property(entity, property)
+	paramExpr := NamedParam(paramName, value)
+
+	switch operator {
+	case "=", "==":
+		return Eq(propExpr, paramExpr)
+	case "!=", "<>":
+		return Ne(propExpr, paramExpr)
+	case ">":
+		return Gt(propExpr, paramExpr)
+	case ">=":
+		return Gte(propExpr, paramExpr)
+	case "<":
+		return Lt(propExpr, paramExpr)
+	case "<=":
+		return Lte(propExpr, paramExpr)
+	case "IN":
+		// For IN, value should be a slice or array
+		return expr.In(propExpr, value)
+	case "CONTAINS":
+		// For CONTAINS, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.Contains(propExpr, strVal)
+		}
+		panic("CONTAINS operator requires a string value")
+	case "STARTS WITH":
+		// For STARTS WITH, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.StartsWith(propExpr, strVal)
+		}
+		panic("STARTS WITH operator requires a string value")
+	case "ENDS WITH":
+		// For ENDS WITH, value should be a string
+		if strVal, ok := value.(string); ok {
+			return expr.EndsWith(propExpr, strVal)
+		}
+		panic("ENDS WITH operator requires a string value")
+	default:
+		panic("Unsupported operator: " + operator)
+	}
+}
+
+// Render renders a statement to a Cypher query string
 func Render(statement core.Statement) string {
 	r := renderer.NewCypherRenderer()
 	return r.Render(statement)
