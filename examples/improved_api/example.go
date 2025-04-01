@@ -112,10 +112,13 @@ func main() {
 	// Redefine person to avoid variable shadowing
 	p := cypher.Node("Person").Named("p")
 
-	// Create a relationship pattern using a complete pattern
-	actedInPattern := cypher.Pattern(p, p.RelationshipTo(movie, "ACTED_IN").Named("r"), movie)
+	// Create a relationship pattern
+	rel := p.RelationshipTo(movie, "ACTED_IN").Named("r")
+	path := cypher.Path(p, rel, movie)
 
-	stmt3, err := cypher.Match(actedInPattern).
+	fmt.Println("DEBUG: Path pattern =", path.String())
+
+	stmt3, err := cypher.Match(path).
 		Returning(p, movie).
 		Limit(3).
 		Build()
@@ -152,13 +155,13 @@ func main() {
 	tomHandsProp := tomHanks.Property("name").Eq("Tom Hanks")
 
 	movieNode := cypher.Node("Movie").Named("m")
-	actedInRel := cypher.Pattern(tomHanks, tomHanks.RelationshipTo(movieNode, "ACTED_IN"), movieNode)
+	actedInRel := tomHanks.RelationshipTo(movieNode, "ACTED_IN")
 
 	stmt4, err := cypher.Match(tomHanks).
 		Where(tomHandsProp).
-		With(tomHanks).
-		Match(actedInRel).
-		Where(movieNode.Property("released").Gt(cypher.ParamWithValue("year", 2000))).
+		With(cypher.Var("p")). // Use the new Var function
+		Match(cypher.Path(tomHanks, actedInRel, movieNode)).
+		Where(movieNode.Property("released").Lt(cypher.ParamWithValue("year", 2000))).
 		Returning(movieNode.Property("title"), movieNode.Property("released")).
 		OrderBy(cypher.Desc(movieNode.Property("released"))).
 		Limit(5).

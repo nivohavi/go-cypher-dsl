@@ -1,0 +1,10 @@
+../../pkg/cypher/cypher.go:5:2: no required module provides package github.com/nivohavi/go-cypher-dsl/pkg2/cypher/ast; to add it:
+	go get github.com/nivohavi/go-cypher-dsl/pkg2/cypher/ast
+../../pkg/cypher/cypher.go:6:2: no required module provides package github.com/nivohavi/go-cypher-dsl/pkg2/cypher/builder; to add it:
+	go get github.com/nivohavi/go-cypher-dsl/pkg2/cypher/builder
+../../pkg/cypher/cypher.go:7:2: no required module provides package github.com/nivohavi/go-cypher-dsl/pkg2/cypher/core; to add it:
+	go get github.com/nivohavi/go-cypher-dsl/pkg2/cypher/core
+../../pkg/cypher/cypher.go:8:2: no required module provides package github.com/nivohavi/go-cypher-dsl/pkg2/cypher/expr; to add it:
+	go get github.com/nivohavi/go-cypher-dsl/pkg2/cypher/expr
+../../pkg/cypher/cypher.go:9:2: no required module provides package github.com/nivohavi/go-cypher-dsl/pkg2/cypher/renderer; to add it:
+	go get github.com/nivohavi/go-cypher-dsl/pkg2/cypher/renderer
