@@ -22,8 +22,6 @@ type NodeExpression interface {
 	WithLabels(labels ...string) NodeExpression
 	// WithProperties adds properties to this node pattern
 	WithProperties(properties map[string]Expression) NodeExpression
-	// WithProps adds properties with automatic conversion to expressions
-	WithProps(properties map[string]interface{}) Expression
 	// Props is an alias for WithProps
 	Props(properties map[string]interface{}) Expression
 	// RelationshipTo creates a relationship from this node to another
@@ -34,6 +32,9 @@ type NodeExpression interface {
 	RelationshipBetween(other NodeExpression, types ...string) RelationshipPattern
 	// SymbolicName returns the alias of this node pattern
 	SymbolicName() string
+	// WithProps adds properties with automatic conversion to expressions
+	// and returns the node expression itself for chaining
+	WithProps(properties map[string]interface{}) NodeExpression
 }
 
 // RelationshipPattern represents a relationship in a Cypher query

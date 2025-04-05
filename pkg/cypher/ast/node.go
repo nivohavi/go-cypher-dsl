@@ -48,7 +48,7 @@ func (n *nodePattern) WithProperties(properties map[string]core.Expression) core
 }
 
 // WithProps adds properties with automatic conversion to expressions
-func (n *nodePattern) WithProps(properties map[string]interface{}) core.Expression {
+func (n *nodePattern) WithProps(properties map[string]interface{}) core.NodeExpression {
 	clone := *n
 	for k, v := range properties {
 		switch val := v.(type) {
