@@ -504,6 +504,72 @@ func Max(expression core.Expression) core.Expression {
 	return expr.Max(expression)
 }
 
+// Collect creates a COLLECT function expression
+func Collect(expression core.Expression) core.Expression {
+	return expr.Collect(expression)
+}
+
+// Distinct wraps an expression with DISTINCT keyword
+func Distinct(expression core.Expression) core.Expression {
+	return expr.Distinct(expression)
+}
+
+// String operators
+// ================================================================
+
+// Concat concatenates multiple string expressions using the + operator
+func Concat(expressions ...core.Expression) core.Expression {
+	return expr.Concat(expressions...)
+}
+
+// Substring creates a SUBSTRING function expression
+// substring(expression, start [, length])
+func Substring(expression core.Expression, start core.Expression, length ...core.Expression) core.Expression {
+	return expr.Substring(expression, start, length...)
+}
+
+// Replace creates a REPLACE function expression
+func Replace(expression, search, replace core.Expression) core.Expression {
+	return expr.Replace(expression, search, replace)
+}
+
+// Split creates a SPLIT function expression
+func Split(expression, delimiter core.Expression) core.Expression {
+	return expr.Split(expression, delimiter)
+}
+
+// ToLower creates a toLower function expression
+func ToLower(expression core.Expression) core.Expression {
+	return expr.ToLower(expression)
+}
+
+// ToUpper creates a toUpper function expression
+func ToUpper(expression core.Expression) core.Expression {
+	return expr.ToUpper(expression)
+}
+
+// Trim creates a TRIM function expression
+func Trim(expression core.Expression) core.Expression {
+	return expr.Trim(expression)
+}
+
+// LTrim creates a lTrim function expression
+func LTrim(expression core.Expression) core.Expression {
+	return expr.LTrim(expression)
+}
+
+// RTrim creates a rTrim function expression
+func RTrim(expression core.Expression) core.Expression {
+	return expr.RTrim(expression)
+}
+
+// RawCypher creates a raw Cypher expression that will be inserted as-is into the query
+// WARNING: Use with caution to avoid Cypher injection vulnerabilities.
+// Only use this when the DSL doesn't support a specific Cypher feature.
+func RawCypher(cypher string) core.Expression {
+	return expr.RawCypher(cypher)
+}
+
 // Utility functions
 
 // convertProperties converts a map of Go values to a map of Expression values
