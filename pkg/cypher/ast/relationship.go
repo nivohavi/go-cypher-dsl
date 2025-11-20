@@ -135,6 +135,22 @@ func (r *relationshipPattern) String() string {
 		sb.WriteString("`")
 	}
 
+	// Write properties if present
+	if len(r.properties) > 0 {
+		sb.WriteString(" {")
+		first := true
+		for k, v := range r.properties {
+			if !first {
+				sb.WriteString(", ")
+			}
+			first = false
+			sb.WriteString(k)
+			sb.WriteString(": ")
+			sb.WriteString(v.String())
+		}
+		sb.WriteString("}")
+	}
+
 	sb.WriteString("]")
 
 	// End with the appropriate arrow
