@@ -90,6 +90,118 @@ fmt.Println(query.Cypher())
 
 ## Enhanced Features
 
+### Function Expression Methods
+
+Chain function expressions with aliases and use DISTINCT:
+
+```go
+person := cypher.Node("Person").Named("p")
+
+// Count with alias - fluent chaining
+stmt, _ := cypher.Match(person).
+    Returning(cypher.Count(person).As("count")).
+    Build()
+
+// Count distinct values
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.Count(cypher.Distinct(person.Property("name"))).As("uniqueNames"),
+    ).
+    Build()
+
+// Collect aggregation
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.Collect(person.Property("name")).As("names"),
+    ).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (p:Person) RETURN collect(p.name) AS names
+```
+
+### Auto-quoted Aliases
+
+Aliases are automatically quoted when they contain special characters:
+
+```go
+person := cypher.Node("Person").Named("p")
+
+// Automatically quotes aliases with dots, spaces, or special characters
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.As(person.Property("name"), "Member.Name"),  // Renders as: p.name AS `Member.Name`
+        cypher.As(person.Property("email"), "user_email"),  // Renders as: p.email AS user_email
+    ).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (p:Person) RETURN p.name AS `Member.Name`, p.email AS user_email
+```
+
+### String Operators
+
+Comprehensive string manipulation functions:
+
+```go
+person := cypher.Node("Person").Named("p")
+
+// String concatenation
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.Concat(
+            person.Property("firstName"),
+            cypher.String(" "),
+            person.Property("lastName"),
+        ).As("fullName"),
+    ).
+    Build()
+
+// String transformations
+stmt, _ := cypher.Match(person).
+    Where(
+        cypher.Eq(
+            cypher.ToLower(person.Property("email")),
+            cypher.String("test@example.com"),
+        ),
+    ).
+    Returning(
+        cypher.Substring(person.Property("name"), cypher.Integer(0), cypher.Integer(10)).As("shortName"),
+        cypher.Replace(person.Property("name"), cypher.String(" "), cypher.String("_")).As("normalizedName"),
+        cypher.ToUpper(person.Property("status")),
+        cypher.Trim(person.Property("notes")),
+    ).
+    Build()
+
+// Split strings
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.Split(person.Property("tags"), cypher.String(",")).As("tagList"),
+    ).
+    Build()
+```
+
+### Raw Cypher Escape Hatch
+
+For advanced use cases not yet covered by the DSL:
+
+```go
+// Insert literal Cypher when needed
+stmt, _ := cypher.Match(person).
+    Returning(
+        cypher.RawCypher("p.name + ' ' + p.surname").As("fullName"),
+    ).
+    Build()
+
+// Use in WHERE clauses for complex expressions
+stmt, _ := cypher.Match(person).
+    Where(cypher.RawCypher("p.age > 30 AND p.status = 'active'")).
+    Returning(person).
+    Build()
+```
+
+⚠️ **Security Warning:** Use `RawCypher()` with caution to avoid Cypher injection vulnerabilities. Only use when the DSL doesn't support a specific feature, and ensure any user input is properly sanitized.
+
 ### Complex Path Construction
 
 Create paths with multiple relationships more easily using `ComplexPath`:
@@ -328,6 +440,150 @@ stmt, _ := cypher.Merge(personProps).
 
 fmt.Println(stmt.Cypher())
 // MERGE (p:`Person` {name: 'Keanu Reeves'}) ON CREATE SET p.created = 2023 ON MATCH SET p.updated = 2023 RETURN p
+```
+
+## Complex Real-World Query Examples
+
+The DSL supports building sophisticated queries for real-world scenarios. Here are some examples:
+
+### E-commerce: Customer Purchase Analysis
+
+```go
+customer := cypher.Node("Customer").Named("customer")
+order := cypher.Node("Order").Named("order")
+product := cypher.Node("Product").Named("product")
+
+rel1 := customer.RelationshipTo(order, "PURCHASED")
+rel2 := order.RelationshipTo(product, "CONTAINS")
+
+stmt, _ := cypher.Match(cypher.Path(customer, rel1, order, rel2, product)).
+    Returning(
+        customer.Property("name"),
+        cypher.As(cypher.Count(cypher.Distinct(order)), "totalOrders"),
+        cypher.As(cypher.Collect(cypher.Distinct(product.Property("name"))), "productsPurchased"),
+    ).
+    OrderBy(cypher.Desc(cypher.Var("totalOrders"))).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (customer:Customer)-[:PURCHASED]->(order:Order)-[:CONTAINS]->(product:Product)
+// RETURN customer.name, count(DISTINCT order) AS totalOrders, collect(DISTINCT product.name) AS productsPurchased
+// ORDER BY totalOrders DESC
+```
+
+### Fraud Detection: Suspicious IP Patterns
+
+```go
+txn := cypher.Node("Transaction").Named("t")
+account := cypher.Node("Account").Named("a")
+ip := cypher.Node("IPAddress").Named("ip")
+
+rel1 := txn.RelationshipTo(account, "FROM")
+rel2 := account.RelationshipTo(ip, "HAS_IP")
+
+stmt, _ := cypher.Match(cypher.Path(txn, rel1, account, rel2, ip)).
+    With(
+        ip,
+        cypher.As(cypher.Count(cypher.Distinct(account)), "accountCount"),
+    ).
+    Where(
+        cypher.Gt(cypher.Var("accountCount"), cypher.Integer(1)),
+    ).
+    Returning(
+        cypher.As(ip.Property("address"), "SuspiciousIP"),
+        cypher.Var("accountCount"),
+    ).
+    OrderBy(cypher.Desc(cypher.Var("accountCount"))).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (t:Transaction)-[:FROM]->(a:Account)-[:HAS_IP]->(ip:IPAddress)
+// WITH ip, count(DISTINCT a) AS accountCount
+// WHERE accountCount > 1
+// RETURN ip.address AS SuspiciousIP, accountCount
+// ORDER BY accountCount DESC
+```
+
+### Recommendation System: Collaborative Filtering
+
+```go
+u1 := cypher.Node("User").Named("u1")
+u2 := cypher.Node("User").Named("u2")
+p := cypher.Node("Product").Named("p")
+rec := cypher.Node("Product").Named("rec")
+
+rel1 := u1.RelationshipTo(p, "PURCHASED")
+rel2 := u2.RelationshipTo(p, "PURCHASED")
+rel3 := u2.RelationshipTo(rec, "PURCHASED")
+
+stmt, _ := cypher.Match(cypher.Path(u1, rel1, p)).
+    Match(cypher.Path(u2, rel2, p)).
+    Match(cypher.Path(u2, rel3, rec)).
+    Where(
+        cypher.Not(cypher.Pattern(u1, u1.RelationshipTo(rec, "PURCHASED"), rec)),
+    ).
+    Returning(
+        cypher.As(rec.Property("name"), "RecommendedProduct"),
+        cypher.As(cypher.Count(cypher.Var("u2")), "RecommendationScore"),
+    ).
+    OrderBy(cypher.Desc(cypher.Var("RecommendationScore"))).
+    Limit(5).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (u1:User)-[:PURCHASED]->(p:Product)
+// MATCH (u2:User)-[:PURCHASED]->(p)
+// MATCH (u2)-[:PURCHASED]->(rec:Product)
+// WHERE NOT (u1)-[:PURCHASED]->(rec)
+// RETURN rec.name AS RecommendedProduct, count(u2) AS RecommendationScore
+// ORDER BY RecommendationScore DESC
+// LIMIT 5
+```
+
+### E-commerce: Frequently Bought Together
+
+```go
+p1 := cypher.Node("Product").Named("p1")
+p2 := cypher.Node("Product").Named("p2")
+order := cypher.Node("Order").Named("order")
+
+rel1 := order.RelationshipTo(p1, "CONTAINS")
+rel2 := order.RelationshipTo(p2, "CONTAINS")
+
+stmt, _ := cypher.Match(cypher.Path(order, rel1, p1)).
+    Match(cypher.Path(order, rel2, p2)).
+    Where(
+        cypher.Ne(cypher.Var("p1"), cypher.Var("p2")),
+    ).
+    Returning(
+        cypher.As(p1.Property("name"), "Product1"),
+        cypher.As(p2.Property("name"), "Product2"),
+        cypher.As(cypher.Count(cypher.Var("order")), "timesTogether"),
+    ).
+    OrderBy(cypher.Desc(cypher.Var("timesTogether"))).
+    Limit(10).
+    Build()
+
+fmt.Println(stmt.Cypher())
+// MATCH (order:Order)-[:CONTAINS]->(p1:Product)
+// MATCH (order)-[:CONTAINS]->(p2:Product)
+// WHERE p1 <> p2
+// RETURN p1.name AS Product1, p2.name AS Product2, count(order) AS timesTogether
+// ORDER BY timesTogether DESC
+// LIMIT 10
+```
+
+## Testing
+
+The package includes comprehensive test coverage for all features, including:
+- Unit tests for expression building and rendering
+- Integration tests for complex query patterns
+- Real-world scenario tests (e-commerce, fraud detection, recommendations)
+- Edge case handling and error scenarios
+
+Run tests with:
+```bash
+go test ./...
 ```
 
 ## Features
